@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE suppressions PUBLIC
+    "-//Puppy Crawl//DTD Suppressions 1.0//EN"
+    "http://www.puppycrawl.com/dtds/suppressions_1_0.dtd">
+
+<suppressions>
+    <suppress checks="MethodNameCheck"
+              files="ConferenceBridgeProvisioningImpl.java"
+              lines="38-42"/>
+    <suppress checks=".*"
+              files="org.sipfoundry.sipxconfig.sip.log4j.*" />
+    <suppress checks="[a-zA-Z0-9]*"
+              files="DaoAuthenticationProvider.java"/>
+    <suppress checks="[a-zA-Z0-9]*"
+              files="DigestProcessingFilter.java"/>
+    <suppress checks="[a-zA-Z0-9]*"
+              files="FreeswitchApi.java"/>              
+</suppressions>
