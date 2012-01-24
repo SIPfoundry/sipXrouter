@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!DOCTYPE comps PUBLIC "-//The cAos Project//DTD Comps info//EN" "comps.dtd">
+<!--
+  - I cannot get groups to be recursive. groupreq doesn't appear to have
+  - much effect. See
+  -   https://lists.dulug.duke.edu/pipermail/yum-devel/2006-May/002140.html
+  - categories do not help either. From what I can tell, you need to duplicate
+  - package dependencies
+  -->
+<comps>
+  <group>
+   <id>sipxecs</id>
+   <uservisible>true</uservisible>
+   <name>sipXecs PBX</name>
+   <description>Standard sipXpbx PBX</description>
+   <packagelist>
+     <packagereq type="mandatory">sipxproxy</packagereq>
+     <packagereq type="mandatory">sipxpublisher</packagereq>
+     <packagereq type="mandatory">sipxregistry</packagereq>
+     <packagereq type="mandatory">sipxconfig</packagereq>
+     <packagereq type="mandatory">sipxbridge</packagereq>
+     <packagereq type="mandatory">sipxivr</packagereq>
+     <packagereq type="mandatory">sipxpolycom</packagereq>
+     <packagereq type="mandatory">sipxopenfire</packagereq>
+     <packagereq type="mandatory">sipxbridge</packagereq>
+   </packagelist>
+  </group>
+</comps>
