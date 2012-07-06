@@ -1,11 +1,13 @@
 <% 
-  if EMERG_NUMBER_DIALED[:groupName] != 'disabled'
+  data.each {|a, v|
+    next unless a =~ /^PROXY_/
+    next unless v[:groupName] != 'disabled'
 %>
 type=Single
 ptype=RegExp
-pattern=".*(Emergency dial rule .* was invoked .*$)"
+pattern=ALARM_<%= a %> (.*)$
 desc=$1
-action=shellcmd @SIPX_BINDIR@/sipxtrap EMERG_NUMBER_DIALED '%s'
+action=shellcmd @SIPX_BINDIR@/sipxtrap <%= a %> '%s'
 <% 
-  end 
+  }
 %>
