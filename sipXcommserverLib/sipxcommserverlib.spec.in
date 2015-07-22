@@ -48,7 +48,6 @@ Requires: ruby
 Requires: patch
 # bind-utils required for dig
 Requires: bind-utils
-Requires: sipxsupervisor >= %version
 Requires: poco-crypto
 Requires: poco-data
 Requires: poco-foundation

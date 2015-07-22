@@ -46,8 +46,7 @@ BuildRequires: cronie
 BuildRequires: vixie-cron
 %endif
 %endif
-Requires: sipxcommserverlib >= %version
-Requires: sipxrelay >= %version
+
 Requires: chkconfig
 
 Prefix:    %_prefix

@@ -5,8 +5,9 @@
 # the revision.  Source build therefore should save revision into the tarball
 
 if [ "$#" == "0" ]; then
-    echo "Usage: $0 version. Example: $0 1.2.3" 1>&2
-    exit 1
+    VERSION="15.06"
+else
+    VERSION=$1
 fi
 
 if test -f ./tarball-revision; then
@@ -23,19 +24,7 @@ if test -d ../.git; then
   parent_rev=${parent%.*}
 fi
 
-VERSION=$1
-if [ $VERSION == "15.06" ]; then
-    VERSION="4.6.0"
-fi
-if [ $VERSION == "15.05" ]; then
-    VERSION="4.6.0"
-fi
-if [ $VERSION == "15.04" ]; then
-    VERSION="4.6.0"
-fi
-if [ $VERSION == "1.4.4" ]; then
-    VERSION="1.0.7"
-fi
+
 VER_REV=`git describe --abbrev=5 --match="v${VERSION}" HEAD`
 if [ "$?" != "0" ]; then
     echo "Could not find tag v$VERSION" 1>&2

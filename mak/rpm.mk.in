@@ -108,6 +108,18 @@ $(sipx:=.rpm.if-changed) $(lib:=.rpm.if-changed) : %.rpm.if-changed : $$($$*_GIT
 	fi
 	cp @RPMBUILD_TOPDIR@/SRPMS/$($(PROJ)_SRPM) $(MOCK_SRPM_DIR)
 
+%.localrpm : %.dist
+	rm -rf $(PROJ)/RPMBUILD; \
+	mkdir -p $(PROJ)/RPMBUILD/{DIST,BUILD,SOURCES,RPMS,SRPMS,SPECS}; \
+	echo `pwd`/$(PROJ)/RPMBUILD > .rpmtopdir; \
+	rpmbuild -ta --define "%_topdir `cat .rpmtopdir`"  $($(PROJ)_TAR); \
+	rm -rf $(PROJ)/RPMS; mv $(PROJ)/RPMBUILD/RPMS $(PROJ); \
+	rm -rf $(PROJ)/SRPMS; mv $(PROJ)/RPMBUILD/SRPMS $(PROJ); \
+	rm -rf rm -rf $(PROJ)/RPMBUILD
+
+%.localrpm-install :
+	yum -y localinstall `pwd`/$(PROJ)/RPMS/x86_64/*.rpm
+
 $(sipx:=.srpm) : %.srpm : %.dist $(MOCK_INIT_TEST) $(MOCK_RESULTS_DIR)
 	rpmbuild -ts $(SRPM_DEFS) $($(PROJ)_SRPM_DEFS) --nodeps $($(PROJ)_TAR)
 	test -d $(MOCK_SRPM_DIR) || mkdir -p $(MOCK_SRPM_DIR)

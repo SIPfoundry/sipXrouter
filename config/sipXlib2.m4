@@ -44,7 +44,8 @@ test -n "$SIPXPBXGROUP" || SIPXPBXGROUP=$SIPXPBXUSER
 
 AC_ARG_VAR(PACKAGE_REVISION, [Package revision number. Default is based on date rpm is built. Allowed values: stable, unstable, developer or supply your own value of command.])
 if test -z "$PACKAGE_REVISION" || test "$PACKAGE_REVISION" == "developer" ; then
-  PACKAGE_REVISION=`date +%Y%m%d%H%M%S`
+  #PACKAGE_REVISION=`date +%Y%m%d%H%M%S`
+  PACKAGE_REVISION=`cd ${srcdir} && ./config/revision-gen ${PACKAGE_VERSION}`
 else
   case ${PACKAGE_REVISION} in
     unstable )

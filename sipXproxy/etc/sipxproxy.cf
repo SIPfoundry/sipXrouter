@@ -18,11 +18,6 @@ bundle agent sipxproxy {
   methods:
     sipxproxy::
       "any" usebundle => "sipxcommserverlib";
-
-      # if relay is supposed to start, it needs to start up first
-      # so reference it here.
-      "any" usebundle => "sipxrelay";
-
       "any" usebundle => "sipxproxy_config";
     any::
       "any" usebundle => "sipxproxy_setup";
@@ -49,16 +44,13 @@ bundle agent sipxproxy_logwatcher {
 
 bundle agent sipxproxy_config {
   vars:
-    # XX-8932 - sipxbridge.xml is a strange dependency, but there because of
-    # strange hack made in proxy to try to support routing directory to bridge
     any::
       "xml_file" slist => {
         "peeridentities.xml",
         "mappingrules.xml",
         "authrules.xml",
         "fallbackrules.xml",
-        "forwardingrules.xml",
-        "sipxbridge.xml"
+        "forwardingrules.xml"
       };
 
   files:
@@ -104,9 +96,6 @@ bundle edit_line sipXproxy_config_contents() {
       "SIPX_PROXY.990_emerglineid.EMERGRULES : $(sipx.SIPX_CONFDIR)/authrules.xml";
       "SIPX_PROXY_BIND_IP : $(sipx.bind_ip)";
       "SIPX_PROXY_CALL_STATE_DB_PASSWORD : $(sipx.NEW_POSTGRESQL_PASSWORD)";
-      "SIPX_TRAN_HOOK_LIBRARY.905_gatewaydest : $(sipx.SIPX_LIBDIR)/transactionplugins/libGatewayDestPlugin.so";
-    homer::
-      "SIPX_TRAN_HOOK_LIBRARY.100_sipxhomer : $(sipx.SIPX_LIBDIR)/transactionplugins/libsipXhomerProxyPlugin.so";
 
   delete_lines:
     any::
@@ -163,11 +152,6 @@ bundle agent sipxproxy_running {
         comment => "restart sipxproxy",
         args => "asyncrestart";
 
-    redeploy_nat.sipxrelay::
-      "$(sipx.SIPX_SERVICEDIR)/sipxrelay"
-        comment => "redeploy NAT config - restart sipxrelay",
-        args => "restart";
-
     (restart_sipxproxy_and_registrar|redeploy_nat).sipxproxy::
       "$(sipx.SIPX_SERVICEDIR)/sipxproxy"
         comment => "dialplan or NAT config redeploy - restart sipxproxy",
@@ -176,11 +160,6 @@ bundle agent sipxproxy_running {
     (restart_sipxproxy_and_registrar|redeploy_nat).sipxregistrar::
       "$(sipx.SIPX_SERVICEDIR)/sipxregistrar"
         comment => "dialplan or NAT config redeploy -restart sipxregistrar",
-        args => "restart";
-
-    redeploy_nat.sipxbridge::
-      "$(sipx.SIPX_SERVICEDIR)/sipxbridge"
-        comment => "redeploy NAT config - restart sipxbridge",
         args => "restart";
 
     sipxproxy.sipxproxy_running.refresh_sipxproxy::

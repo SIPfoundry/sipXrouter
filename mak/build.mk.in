@@ -21,8 +21,8 @@ $(foreach M,$(git_submodules) $(git_custommodules),$(eval $(M)_GIT_SUBMODULE = $
 include $(SRC)/mak/modules.mk
 
 # pull in dependency make fragments
-include $(SRC)/mak/*.sipxecs.mk
-include $(SRC)/*/.sipxecs.mk
+#include $(SRC)/mak/*.sipxecs.mk
+#include $(SRC)/*/.sipxecs.mk
 
 # Example .modules-include files
 # - Includes sipxecs core pieces and Italian language pack
