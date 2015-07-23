@@ -106,7 +106,6 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_libdir}/authplugins/libEmergencyLineIdentifier.so*
 %attr(755,root,root) %{_libdir}/authplugins/libEnforceAuthRules.so*
 %attr(755,root,root) %{_libdir}/authplugins/libMSFT_ExchangeTransferHack.so*
-%attr(755,root,root) %{_libdir}/authplugins/libNatTraversalAgent.so*
 %attr(755,root,root) %{_libdir}/authplugins/libRequestLinter.so*
 %attr(755,root,root) %{_libdir}/authplugins/libSubscriptionAuth.so*
 %attr(755,root,root) %{_libdir}/authplugins/libTransferControl.so*
@@ -121,7 +120,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/authplugins/libEmergencyLineIdentifier.la
 %{_libdir}/authplugins/libEnforceAuthRules.la
 %{_libdir}/authplugins/libMSFT_ExchangeTransferHack.la
-%{_libdir}/authplugins/libNatTraversalAgent.la
 %{_libdir}/authplugins/libRequestLinter.la
 %{_libdir}/authplugins/libSubscriptionAuth.la
 %{_libdir}/authplugins/libTransferControl.la
