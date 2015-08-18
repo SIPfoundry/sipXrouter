@@ -477,7 +477,7 @@ UtlBoolean SipXProxyCseObserver::handleMessage(OsMsg& eventMessage)
               sipMsg->getProperty("auth-code", authCode);
               if (!authCode.empty())
               {
-                fromUrl.setHeaderParameter("auth-code", authCode.c_str());
+                fromUrl.setUrlParameter("auth-code", authCode.c_str());
               }
               fromUrl.toString(fromField);
             }
