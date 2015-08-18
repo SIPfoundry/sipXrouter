@@ -466,8 +466,25 @@ UtlBoolean SipXProxyCseObserver::handleMessage(OsMsg& eventMessage)
             UtlString toField;
             sipMsg->getToField(&toField);
             
+            //
+            // Determine if the SIP Message has an auth-code property.
+            // Append it to the from uri
+            //
             UtlString fromField;
-            sipMsg->getFromField(&fromField);
+            if (sipMsg->hasProperty("auth-code"))
+            {
+              std::string authCode;
+              sipMsg->getProperty("auth-code", authCode);
+              if (!authCode.empty())
+              {
+                fromUrl.setHeaderParameter("auth-code", authCode.c_str());
+              }
+              fromUrl.toString(fromField);
+            }
+            else
+            {
+              sipMsg->getFromField(&fromField);
+            }
 
 
             // collect the branch Id (i.e. transaction id) and via count.
