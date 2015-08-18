@@ -257,9 +257,8 @@ EnforceAuthRules::authorizeAndModify(const UtlString& id,    /**< The authentica
 
             UtlString unmatchedPermissions;
             UtlString matchedPermission;
-            UtlString authCode;
             if (isAuthorized(id, requiredPermissions,
-                             matchedPermission, unmatchedPermissions, authCode)
+                             matchedPermission, unmatchedPermissions)
                 )
             {
                result = ALLOW;
@@ -267,11 +266,6 @@ EnforceAuthRules::authorizeAndModify(const UtlString& id,    /**< The authentica
                              " id '%s' authorized by '%s'",
                              mInstanceName.data(), id.data(), matchedPermission.data()
                              );
-               
-               if (!authCode.isNull())
-               {
-                 request.setProperty("auth-code", authCode.data());
-               }
             }
             else
             {
@@ -321,8 +315,7 @@ EnforceAuthRules::authorizeAndModify(const UtlString& id,    /**< The authentica
 bool EnforceAuthRules::isAuthorized(const UtlString& id,
      const ResultSet& requiredSet,
      UtlString& matchedPermission,   ///< first required permission found
-     UtlString& unmatchedPermissions, ///< requiredPermissions as a single string
-     UtlString& authCode ///< The authcode used if applicable
+     UtlString& unmatchedPermissions ///< requiredPermissions as a single string
  )
 {
     if (id.isNull())
@@ -344,12 +337,7 @@ bool EnforceAuthRules::isAuthorized(const UtlString& id,
     UtlSListIterator requiredRecs(requiredSet);
     UtlHashMap* requiredRecord;
     UtlString permissionKey("permission");
-    
-    if (!entity.authc().empty())
-    {
-      authCode = entity.authc().c_str();
-    }
-    
+       
     while((requiredRecord = dynamic_cast<UtlHashMap*>(requiredRecs())))
     {
       UtlString* reqPermission = dynamic_cast<UtlString*>(requiredRecord->findValue(&permissionKey));

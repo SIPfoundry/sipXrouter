@@ -494,8 +494,12 @@ UtlBoolean SipXProxyCseObserver::handleMessage(OsMsg& eventMessage)
             UtlString authIdentity;
             sipxIdentity.getIdentity(authIdentity);
             EntityRecord entity;
-            std::string identity = authIdentity.str();
-            SipRouter::getEntityDBInstance()->findByIdentity(identity, entity);
+            
+            if (!authIdentity.isNull())
+            {
+              std::string identity = authIdentity.str();
+              SipRouter::getEntityDBInstance()->findByIdentity(identity, entity);
+            }
             
             //
             // Determine if the entity record has an authc field

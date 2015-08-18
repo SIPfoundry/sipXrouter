@@ -94,8 +94,7 @@ class EnforceAuthRules : public AuthPlugin
    bool isAuthorized(const UtlString& identity,
                      const ResultSet& requiredPermissions,
                      UtlString& matchedPermission,   ///< first required permission found
-                     UtlString& unmatchedPermissions, ///< requiredPermissions as a single string
-                     UtlString& authCode ///< The authcode used if applicable
+                     UtlString& unmatchedPermissions ///< requiredPermissions as a single string
                      );
 
    virtual void announceAssociatedSipRouter( SipRouter* sipRouter );
