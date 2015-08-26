@@ -142,7 +142,8 @@ SipXProxyCseObserver::SipXProxyCseObserver(SipUserAgent&         sipUserAgent,
    mpWriter(pWriter),
    mSequenceNumber(0),
    mFlushTimer(getMessageQueue(), 0),
-   mCallTransMutex(OsMutex::Q_FIFO)
+   mCallTransMutex(OsMutex::Q_FIFO),
+   _logAuthCodes(false)
 {
    OsTime timeNow;
    OsDateTime::getCurTime(timeNow);
@@ -506,7 +507,7 @@ UtlBoolean SipXProxyCseObserver::handleMessage(OsMsg& eventMessage)
             // Append it to the from uri
             //
             UtlString fromField;
-            if (!entity.authc().empty())
+            if (_logAuthCodes && !entity.authc().empty())
             {
               fromUrl.setUrlParameter("auth-code", entity.authc().c_str());
               fromUrl.toString(fromField);
