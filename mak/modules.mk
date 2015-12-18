@@ -13,7 +13,8 @@ sipx_core = \
   oss_core \
   sipXproxy \
   sipXpublisher \
-  sipXregistry
+  sipXregistry \
+  sipXkamailio 
 
 #additional configure options for sipXresiprocate package
 sipXresiprocate_OPTIONS = --with-c-ares --with-ssl --with-repro --enable-ipv6 --with-tfm
