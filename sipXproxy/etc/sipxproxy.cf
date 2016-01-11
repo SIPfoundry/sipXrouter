@@ -147,7 +147,7 @@ bundle agent sipxproxy_running {
         comment => "start sipxproxy",
         args => "start";
 
-    sipxproxy.sipxproxy_running.(restart_sipxproxy|restart_sipxecs|change_password)::
+    sipxproxy.sipxproxy_running.(restart_sipxproxy|restart_sipxecs|psql_change_password)::
       "$(sipx.SIPX_SERVICEDIR)/sipxproxy"
         comment => "restart sipxproxy",
         args => "asyncrestart";
