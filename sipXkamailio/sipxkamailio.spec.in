@@ -1,0 +1,97 @@
+#!BuildIgnore: post-build-checks
+
+%if 0%{?fedora} >= 16
+%define build_turn 1
+%else
+%define build_turn 0
+%endif
+
+Name: @PACKAGE@
+Version: @VERSION@
+Release: @PACKAGE_REVISION@
+
+Summary: sipX plugins for Kamailio
+License: LGPL
+Group: Development/Libraries
+Vendor: SIPFoundry
+Url: http://www.sipfoundry.org
+
+BuildRequires: automake
+BuildRequires: libtool
+BuildRequires: gcc-c++
+BuildRequires: oss_core-devel
+Requires: oss_core
+BuildRequires: pcre-devel
+BuildRequires: findutils
+Requires: openssl >= 0.9.7a
+Requires: pcre >= 4.5
+
+BuildRequires: boost-devel
+Requires: boost
+
+BuildRequires: libevent-devel
+Requires: libevent
+
+BuildRequires: gtest-devel
+Requires: gtest
+
+Source: %name-%version.tar.gz
+
+Prefix: %_prefix
+BuildRoot: %{_tmppath}/%name-%version-root
+
+%description
+sipX plugins for Kamailio
+
+%if %{_vendor} == suse
+%debug_package
+%endif
+
+# Install header files
+%package devel
+Requires: %name
+Group: Development/Libraries
+Vendor: OSS Software Solutions
+Summary: Header files for %name
+
+
+%description devel
+oss_core is a high level library implementation of a SIP B2BUA
+The library currently provides classes that
+encapsulate functions and operations for:
+
+    * SIP ABNF Parser
+    * SIP Finite State Machines
+    * B2BUA
+    * Java Script Engine using Google V8
+    * SIP Over Websockets
+    * STUN/TURN server
+    * RTP Proxy
+    * CARP High Availability
+
+%prep
+%setup -q
+
+%build
+%configure @SIPX_RPM_CONFIGURE_OPTIONS@
+cp config.log %name.configlog
+make %{_smp_mflags} all
+
+%install
+rm -rf $RPM_BUILD_ROOT
+make DESTDIR=$RPM_BUILD_ROOT install
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%defattr(644,root,root,755)
+%doc  LICENSE README   ChangeLog %name.configlog
+%attr(755,root,root) %{_bindir}/dialog_event_collator_unit_test
+%attr(755,root,root) %{_libdir}/libdialogEventCollator.so*
+%exclude %{_includedir}/DialogEventCollator
+%exclude %{_includedir}/xmlparser
+%exclude %{_libdir}/libdialogEventCollator.la
+
+%changelog
+
