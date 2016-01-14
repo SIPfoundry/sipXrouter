@@ -121,7 +121,7 @@ extern "C" int collate_handle_init(void** handle)
 extern "C" int collate_handle_destroy(void** handle)
 {
   OSS_LOG_INFO("[Plugin] Destroy handle resources");
-  if(handle)
+  if(handle && *handle)
   {
     DialogCollator * collator = reinterpret_cast<DialogCollator*>(*handle);
     collator->disconnect();
