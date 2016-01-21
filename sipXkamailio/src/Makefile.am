@@ -17,10 +17,7 @@ libdialogEventCollator_la_LDFLAGS = \
 	-version-info ${version_Current}:${version_Revision}:${version_Age}
 
 libdialogEventCollator_la_LIBADD = \
-	@LIB_OSS_CORE_LA@ \
-	@OSS_CORE_DEP_LIBS@ \
-	@LIB_OSS_CARP_LA@ \
-	@LIB_OSS_TURN_LA@ \
+	@OSSCORE_LIBS@ \
 	${prefix}/opt/ossapp/libre/lib/libre.a \
 	${prefix}/opt/ossapp/librem/lib/librem.a \
 	-ltcmalloc \

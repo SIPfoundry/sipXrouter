@@ -10,14 +10,15 @@ Group: Development/Libraries
 Vendor: Pingtel Corp.
 Url: http://www.pingtel.com
 
+Obsoletes: @PACKAGE_OBSOLETE_NAME@
 BuildRequires: automake
 BuildRequires: gcc-c++
 BuildRequires: cppunit-devel
 BuildRequires: pcre-devel >= 4.5
 BuildRequires: gperftools-devel
 BuildRequires: unixODBC-devel >= 2.2
-BuildRequires: sipxportlib-devel >= %version
-BuildRequires: sipxtacklib-devel >= %version
+BuildRequires: sipxportlib-ng-devel >= %version
+BuildRequires: sipxtacklib-ng-devel >= %version
 BuildRequires: glibc-headers
 %if %{_vendor} == redhat
 BuildRequires: httpd-devel
@@ -41,8 +42,8 @@ Requires: pwdutils
 Requires: xerces-c >= 2.6.0
 Requires: rpm-libs
 %endif
-Requires: sipxportlib >= %version
-Requires: sipxtacklib >= %version
+Requires: sipxportlib-ng >= %version
+Requires: sipxtacklib-ng >= %version
 Requires: unixODBC >= 2.2
 Requires: ruby
 Requires: patch
@@ -84,8 +85,8 @@ Requires: xerces-c-devel >= 2.6.0
 %if %{_vendor} == redhat
 Requires: xerces-c-devel >= 2.6.0
 %endif
-Requires: sipxportlib-devel >= %version
-Requires: sipxtacklib-devel >= %version
+Requires: sipxportlib-ng-devel >= %version
+Requires: sipxtacklib-ng-devel >= %version
 Requires: unixODBC-devel >= 2.2
 Requires: mongo-cxx-driver-devel >= 2.6.7
 

@@ -16,6 +16,7 @@ Group: Development/Libraries
 Vendor: SIPFoundry
 Url: http://www.sipfoundry.org
 
+Obsoletes: @PACKAGE_OBSOLETE_NAME@
 BuildRequires: automake
 BuildRequires: libtool
 BuildRequires: gcc-c++

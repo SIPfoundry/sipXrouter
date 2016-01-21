@@ -58,6 +58,12 @@ else
 fi
 AC_DEFINE_UNQUOTED([PACKAGE_REVISION], "${PACKAGE_REVISION}", [Revion number including git SHA])
 
+AC_ARG_VAR(PACKAGE_OBSOLETE_NAME, [Package obsolete name])
+if test -z "$PACKAGE_OBSOLETE_NAME"; then
+  PACKAGE_OBSOLETE_NAME=`echo ${PACKAGE/%-ng/}`
+fi
+AC_DEFINE_UNQUOTED([PACKAGE_OBSOLETE_NAME], "${PACKAGE_OBSOLETE_NAME}", [Package obsolete name])
+
 # automake eats straight "if.." in makefiles as autoconf conditions. this avoids that
 # http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=34051
 AC_SUBST(IF, [if])

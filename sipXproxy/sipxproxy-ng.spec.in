@@ -9,6 +9,7 @@ Vendor:   Pingtel Corp.
 Packager: Pingtel <support@pingtel.com>
 Url:      http://www.pingtel.com
 
+Obsoletes: @PACKAGE_OBSOLETE_NAME@
 BuildRequires: automake
 BuildRequires: gcc-c++
 BuildRequires: cppunit-devel
@@ -29,9 +30,9 @@ BuildRequires: pwdutils
 %else
 BuildRequires: shadow-utils
 %endif
-BuildRequires: sipxcommserverlib-devel  >= %version
-BuildRequires: sipxportlib-devel        >= %version
-BuildRequires: sipxtacklib-devel        >= %version
+BuildRequires: sipxcommserverlib-ng-devel  >= %version
+BuildRequires: sipxportlib-ng-devel        >= %version
+BuildRequires: sipxtacklib-ng-devel        >= %version
 
 Source:   %name-%version.tar.gz
 

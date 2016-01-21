@@ -9,18 +9,19 @@ Vendor:   Pingtel Corp.
 Packager: Pingtel <support@pingtel.com>
 Url:      http://www.pingtel.com
 
+Obsoletes: @PACKAGE_OBSOLETE_NAME@
 BuildRequires: automake
 BuildRequires: gcc-c++
 BuildRequires: cppunit-devel
 BuildRequires: pcre-devel >= 4.5
 BuildRequires: openssl-devel
-BuildRequires: sipxcommserverlib-devel >= %version
-BuildRequires: sipxportlib-devel >= %version
-BuildRequires: sipxtacklib-devel >= %version
+BuildRequires: sipxcommserverlib-ng-devel >= %version
+BuildRequires: sipxportlib-ng-devel >= %version
+BuildRequires: sipxtacklib-ng-devel >= %version
 
 Source:   %name-%version.tar.gz
 
-Requires: sipxcommserverlib >= %version
+Requires: sipxcommserverlib-ng >= %version
 
 Prefix:    %_prefix
 BuildRoot: %{_tmppath}/%name-%version-root
@@ -36,7 +37,7 @@ a simple XML plugin configuration file.
 
 %package devel
 Requires: %name
-Requires: sipxcommserverlib-devel >= %version
+Requires: sipxcommserverlib-ng-devel >= %version
 Requires: chkconfig
 Group: Development/Libraries
 Vendor: SIPfoundry
