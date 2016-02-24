@@ -103,6 +103,17 @@ helpful to build projects using the sipXcommserverLib library
 # suse and obs build system
 mv %{_builddir}/%name-%version/%name-rpmlintrc %{_sourcedir}
 
+%pre
+# NOTE: Duplicate copy of user/group add in sipXcommons
+if ! /usr/bin/id -g sipx >/dev/null 2>&1; then
+  /usr/sbin/groupadd -r sipx
+fi
+
+if ! /usr/bin/id sipx >/dev/null 2>&1; then
+  # hack: use "-s /bin/bash", some scripts need to be fixed to not require that
+  /usr/sbin/useradd -M -r -g sipx -d %{_sysconfdir}/sipxpbx -s /bin/bash -c sipx sipx 2>&1
+fi
+
 %build
 %configure @SIPX_RPM_CONFIGURE_OPTIONS@
 cp config.log %name.configlog

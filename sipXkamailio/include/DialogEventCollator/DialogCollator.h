@@ -75,7 +75,7 @@ private:
   bool getAllDialogInfo(const std::string & user, const std::string & domain, CollatedDialogs & dialogInfos);
     
 private:
-    OSS::RedisClient _redisClient;
+    OSS::Persistent::RedisClient _redisClient;
 };
 
 } } } // SIPX::Kamailio::Plugin

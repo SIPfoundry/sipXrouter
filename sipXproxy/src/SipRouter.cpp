@@ -1848,6 +1848,7 @@ bool SipRouter::addNatMappingInfoToContacts( SipMessage& sipRequest ) const
 		  // contact contained NAT mapping information.  If it did, keep
 		  // it around as this mapping information can still be useful.  If
 		  // not, then add a sipX-nonat ULR parameter.
+#ifdef SIPX_NONAT_PARAM
 		  UtlString dummyValue;
 		  if( newContactUri.getUrlParameter( SIPX_PRIVATE_CONTACT_URI_PARAM, dummyValue, 0 ) == FALSE &&
 			  newContactUri.getUrlParameter( SIPX_NO_NAT_URI_PARAM,          dummyValue, 0 ) == FALSE )
@@ -1856,6 +1857,7 @@ bool SipRouter::addNatMappingInfoToContacts( SipMessage& sipRequest ) const
 			 // and no prior NAT mapping info in contact header;
 			 newContactUri.setUrlParameter( SIPX_NO_NAT_URI_PARAM, "" );
 		  }
+#endif
 	   }
 
 	   UtlString newContactString;
