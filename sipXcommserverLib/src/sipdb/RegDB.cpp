@@ -24,16 +24,6 @@
 
 using namespace std;
 
-//
-// Defines the minimum number of seconds used for the TTL of registrations indexed after
-// expirationTime key.
-// !Note!: This time should be 0 (as specified in
-//         http://docs.mongodb.org/manual/tutorial/expire-data/#expire-documents-at-a-specific-clock-time
-//         but due to the limitation in the C++ driver
-//         (see https://github.com/mongodb/mongo/commit/85b1a93def9416ce3fb00faa077dd871183ef39a#diff-7cd4c4d808fb366aeb57036d60ed1806R1110)
-//         we'll have to use the minimum possible value for TTL
-#define MONGO_REG_EXPIRATION_TIME_MIN_TTL_SEC 1
-
 const string RegDB::NS("node.registrar");
 
 RegDB* RegDB::CreateInstance(bool ensureIndexes) {
@@ -88,7 +78,7 @@ void RegDB::ensureIndexes(mongo::DBClientBase* client)
   clientPtr->ensureIndex(_ns, BSON(RegBinding::identity_fld() << 1 ));
 
   // shape the new expirationtime index TTL
-  int newExpirationTimeIndexTTL = (MONGO_REG_EXPIRATION_TIME_MIN_TTL_SEC > _expireGracePeriod) ? MONGO_REG_EXPIRATION_TIME_MIN_TTL_SEC : _expireGracePeriod;
+  int newExpirationTimeIndexTTL = (mongoMod::EXPIRES_AFTER_SECONDS_MINIMUM_SECS > static_cast<int>(_expireGracePeriod)) ? mongoMod::EXPIRES_AFTER_SECONDS_MINIMUM_SECS : static_cast<int>(_expireGracePeriod);
 
   // Note: Since we're not allowed to create the same index using different parameters,
   //       we'll have to drop the existing index in case we're setting it for the first
@@ -96,13 +86,10 @@ void RegDB::ensureIndexes(mongo::DBClientBase* client)
   if (newExpirationTimeIndexTTL != _expirationTimeIndexTTL)
   {
     _expirationTimeIndexTTL = newExpirationTimeIndexTTL;
-    clientPtr->dropIndex(_ns, BSON(RegBinding::expirationTime_fld() << 1));
+    safeDropIndex(clientPtr, RegBinding::expirationTime_fld());
   }
 
-  // Note: the parameters from 3 to 7 are just the defaults of the function
-  clientPtr->ensureIndex(_ns, BSON(RegBinding::expirationTime_fld() << 1),
-                      false, "", true, false, -1, /* just the defaults */
-                      _expirationTimeIndexTTL);
+  safeEnsureTTLIndex(clientPtr, RegBinding::expirationTime_fld(), _expirationTimeIndexTTL);
 
   // close the connection, if it was created
   if (conn)
@@ -351,6 +338,84 @@ static void push_or_replace_binding(RegDB::Bindings& bindings, const RegBinding&
   // We haven't found any older duplicate
   //
   bindings.push_back(binding);
+}
+
+bool RegDB::getUnexpiredRegisteredBinding(
+      const Url& registeredBinding,
+      Bindings& bindings,
+      bool preferPrimary)
+{
+  bool isRegistered = false;
+  UtlString hostPort;
+  UtlString user;
+  registeredBinding.getHostWithPort(hostPort);
+  registeredBinding.getUserId(user);
+
+  std::ostringstream binding;
+  binding << "sip:";
+  if (!user.isNull())
+    binding << user.data() << "@";
+  binding << hostPort.data();
+    
+  long long timeNow = OsDateTime::getSecsSinceEpoch();
+  
+  mongo::BSONObjBuilder query;
+  query.append("binding", binding.str());
+  query.append("expirationTime", BSON_GREATER_THAN(timeNow));
+
+  if (_local)
+  {
+    preferPrimary = false;
+    _local->getUnexpiredRegisteredBinding(registeredBinding, bindings, preferPrimary);
+    query.append("shardId", BSON("$ne" << _local->getShardId()));
+  } 
+
+  MongoDB::ReadTimer readTimer(const_cast<RegDB&>(*this));
+  
+  mongo::BSONObjBuilder builder;
+  if (!preferPrimary)
+    BaseDB::nearest(builder, query.obj());
+  else
+    BaseDB::primaryPreferred(builder, query.obj());
+
+  MongoDB::ScopedDbConnectionPtr conn(mongoMod::ScopedDbConnection::getScopedDbConnection(_info.getConnectionString().toString(), getReadQueryTimeout()));
+  auto_ptr<mongo::DBClientCursor> pCursor = conn->get()->query(_ns, readQueryMaxTimeMS(builder.obj()), 0, 0, 0, mongo::QueryOption_SlaveOk);
+
+  if (!pCursor.get())
+  {
+   throw mongo::DBException("mongo query returned null cursor", 0);
+  }
+
+  if ((isRegistered = pCursor->more()))
+  {
+    RegBinding binding(pCursor->next());
+      
+    if (binding.getExpirationTime() > timeNow)
+    {
+      OS_LOG_INFO(FAC_SIP, "RegDB::getUnexpiredRegisteredBinding "
+      << " Identity: " << binding.getIdentity()
+      << " Contact: " << binding.getContact()
+      << " Expires: " << binding.getExpirationTime() - OsDateTime::getSecsSinceEpoch() << " sec"
+      << " Call-Id: " << binding.getCallId());
+
+      push_or_replace_binding(bindings, binding);
+    }
+    else
+    {
+      OS_LOG_WARNING(FAC_SIP, "RegDB::getUnexpiredRegisteredBinding returned an expired record?!?!"
+        << " Identity: " << binding.getIdentity()
+        << " Contact: " << binding.getContact()
+        << " Call-Id: " << binding.getCallId()
+        << " Expires: " <<  binding.getExpirationTime() << " epoch"
+        << " TimeNow: " << timeNow << " epoch");
+    }
+  }
+  
+  conn->done();
+  
+  OS_LOG_INFO(FAC_SIP, "RegDB::getUnexpiredRegisteredBinding returning " << (isRegistered ? "TRUE" : "FALSE") << " for binding " <<  binding.str());
+   
+  return isRegistered;
 }
 
 bool RegDB::getUnexpiredContactsUser(const string& identity, unsigned long timeNow, Bindings& bindings, bool preferPrimary) const

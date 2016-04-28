@@ -41,7 +41,8 @@ SipRedirectServer* SipRedirectServer::spInstance = NULL;
 
 // Constructor
 SipRedirectServer::SipRedirectServer(OsConfigDb*   pOsConfigDb,  ///< Configuration parameters
-                                     SipUserAgent* pSipUserAgent ///< User Agent to use when sending responses
+                                     SipUserAgent* pSipUserAgent, ///< User Agent to use when sending responses
+                                     SipRegistrar* pSipRegistrar
                                      ) :
    OsServerTask("SipRedirectServer-%d", NULL, SIPUA_DEFAULT_SERVER_OSMSG_QUEUE_SIZE),
    mRedirectorMutex(OsMutex::Q_FIFO),
@@ -49,6 +50,7 @@ SipRedirectServer::SipRedirectServer(OsConfigDb*   pOsConfigDb,  ///< Configurat
    mpSipUserAgent(pSipUserAgent),
    mNextSeqNo(0),
    mRedirectPlugins(RedirectPlugin::Factory, RedirectPlugin::Prefix),
+   mpRegistrar(pSipRegistrar),
    mpConfiguredRedirectors(NULL)
 {
    spInstance = this;
