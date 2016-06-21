@@ -1481,15 +1481,23 @@ SipRouter::ProxyAction SipRouter::proxyMessage(SipMessage& sipRequest, SipMessag
                 // insert a TLS record route on top to maintain the correct transport 
                 // for opposite directions
                 //
-                std::string rline(sipRequest.getFirstHeaderLine());
-                boost::to_lower(rline);
-                if (rline.find("transport=tls") != std::string::npos || rline.find("sips:") != std::string::npos)
+                UtlString routeField;
+                if(!sipRequest.getRouteField(&routeField))
                 {
-                  Url outboundRoute(mRouteHostSecurePort.data());
-                  outboundRoute.setUrlParameter("lr",NULL);
-                  outboundRoute.setUrlParameter("transport=tls",NULL);
-                  outboundRoute.toString(recordRoute);
-                  sipRequest.addRecordRouteUri(recordRoute);
+                  std::string rline(sipRequest.getFirstHeaderLine());
+                  boost::to_lower(rline);
+                  if (rline.find("transport=tls") != std::string::npos || rline.find("sips:") != std::string::npos)
+                  {
+                    Os::Logger::instance().log(FAC_AUTH, PRI_DEBUG,
+                            "SipProxy::proxyMessage add TLS record route with ruri: %s",
+                            rline);
+
+                    Url outboundRoute(mRouteHostSecurePort.data());
+                    outboundRoute.setUrlParameter("lr",NULL);
+                    outboundRoute.setUrlParameter("transport=tls",NULL);
+                    outboundRoute.toString(recordRoute);
+                    sipRequest.addRecordRouteUri(recordRoute);
+                  }
                 }
               }
            }
@@ -1529,17 +1537,27 @@ SipRouter::ProxyAction SipRouter::proxyMessage(SipMessage& sipRequest, SipMessag
           // insert a TLS record route on top to maintain the correct transport 
           // for opposite directions
           //
-          std::string rline(sipRequest.getFirstHeaderLine());
-          boost::to_lower(rline);
-          if (rline.find("transport=tls") != std::string::npos || rline.find("sips:") != std::string::npos)
+
+          UtlString routeField;
+          if(!sipRequest.getRouteField(&routeField))
           {
-            UtlString recordRoute;
-            Url outboundRoute(mRouteHostSecurePort.data());
-            outboundRoute.setUrlParameter("lr",NULL);
-            outboundRoute.setUrlParameter("transport=tls",NULL);
-            outboundRoute.toString(recordRoute);
-            sipRequest.addRecordRouteUri(recordRoute);
+            std::string rline(sipRequest.getFirstHeaderLine());
+            boost::to_lower(rline);
+            if (rline.find("transport=tls") != std::string::npos || rline.find("sips:") != std::string::npos)
+            {
+              Os::Logger::instance().log(FAC_AUTH, PRI_DEBUG,
+                            "SipProxy::proxyMessage add TLS record route with ruri: %s",
+                            rline);
+              
+              UtlString recordRoute;
+              Url outboundRoute(mRouteHostSecurePort.data());
+              outboundRoute.setUrlParameter("lr",NULL);
+              outboundRoute.setUrlParameter("transport=tls",NULL);
+              outboundRoute.toString(recordRoute);
+              sipRequest.addRecordRouteUri(recordRoute);
+            }  
           }
+          
         }
         
      }        // end all extensions are supported

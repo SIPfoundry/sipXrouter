@@ -84,8 +84,10 @@ protected:
     SipUserAgent* mSipUserAgent;
     RegistrationExpiryIntervals mNormalExpiryIntervals; // registration expiry intervals for non-NATed UAs
     RegistrationExpiryIntervals mNatedExpiryIntervals;  // registration expiry intervals for NATed UAs
+    RegistrationExpiryIntervals mTLSExpiryIntervals;  // registration expiry intervals for TLS UAs
     bool mUseCredentialDB;
     UtlString mRealm;
+    UtlBoolean mTlsExpires;
     UtlBoolean mSendExpiresInResponse;
     UtlBoolean mSendAllContactsInResponse;
 
@@ -148,6 +150,9 @@ protected:
 
     /// determine whether or not the registant is located behind a remote NAT.
     bool isRegistrantBehindNat( const SipMessage& registerRequest ) const;
+
+    /// determine whether or not the registant is using TLS as transport
+    bool isRegistrantUsingTLS( const SipMessage& registerRequest ) const;
 
     OsThreadPool<SipMessage*> _registerHandler;
 };

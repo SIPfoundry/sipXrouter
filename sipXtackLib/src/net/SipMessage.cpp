@@ -3237,6 +3237,32 @@ void SipMessage::getTopVia(UtlString* address,
                            UtlBoolean* maddrSet,
                            UtlBoolean* receivedPortSet) const
 {
+  // Get the first (most recent) Via value, which is the one that tells
+  // how to send the response.
+  return getVia(address, port, protocol, 0, receivedPort, receivedSet, maddrSet, receivedPortSet);
+}
+
+void SipMessage::getBottomVia(UtlString* address,
+                           int* port,
+                           UtlString* protocol,
+                           int* receivedPort,
+                           UtlBoolean* receivedSet,
+                           UtlBoolean* maddrSet,
+                           UtlBoolean* receivedPortSet) const
+{
+  // Get the bottom Via value
+  return getVia(address, port, protocol, BOTTOM_SUBFIELD, receivedPort, receivedSet, maddrSet, receivedPortSet);
+}
+
+void SipMessage::getVia(UtlString* address,
+                           int* port,
+                           UtlString* protocol,
+                           int subFieldIndex,
+                           int* receivedPort,
+                           UtlBoolean* receivedSet,
+                           UtlBoolean* maddrSet,
+                           UtlBoolean* receivedPortSet) const
+{
    UtlString Via;
 
    UtlString sipProtocol;
@@ -3277,9 +3303,7 @@ void SipMessage::getTopVia(UtlString* address,
       *receivedPortSet = FALSE;
    }
 
-   // Get the first (most recent) Via value, which is the one that tells
-   // how to send the response.
-   if (getFieldSubfield(SIP_VIA_FIELD, 0, &Via))
+   if (getFieldSubfield(SIP_VIA_FIELD, subFieldIndex, &Via))
    {
       NameValueTokenizer::getSubField(Via, 0, SIP_SUBFIELD_SEPARATORS,
                                       &sipProtocol);

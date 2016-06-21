@@ -74,6 +74,8 @@ const RegEx InstanceUrnUuidMac(
 #define MAX_EXPIRES_TIME_NORMAL 7200
 #define MIN_EXPIRES_TIME_NATED   180
 #define MAX_EXPIRES_TIME_NATED   300
+#define MIN_EXPIRES_TIME_TLS   300
+#define MAX_EXPIRES_TIME_TLS   300
 
 // STRUCTS
 // TYPEDEFS
@@ -93,6 +95,7 @@ SipRegistrarServer::SipRegistrarServer(SipRegistrar& registrar) :
     mRegistrar(registrar),
     mIsStarted(FALSE),
     mSipUserAgent(NULL),
+    mTlsExpires(FALSE),
     mSendExpiresInResponse(TRUE),
     mSendAllContactsInResponse(FALSE),
     mNonceExpiration(5*60)
@@ -181,7 +184,7 @@ SipRegistrarServer::initialize(
     pOsConfigDb->get("SIP_REGISTRAR_MAX_EXPIRES_NATED", tempExpiresString);
     if ( tempExpiresString.isNull() )
     {
-       mNatedExpiryIntervals.mMaxExpiresTime = MAX_EXPIRES_TIME_NATED;
+       mNatedExpiryIntervals.mMaxExpiresTime = MAX_EXPIRES_TIME_TLS;
     }
     else
     {
@@ -194,6 +197,46 @@ SipRegistrarServer::initialize(
                         mNatedExpiryIntervals.mMaxExpiresTime, mNatedExpiryIntervals.mMinExpiresTime
                         );
           mNatedExpiryIntervals.mMaxExpiresTime = mNatedExpiryIntervals.mMinExpiresTime;
+       }
+    }
+
+    // Initialize the TLS minimum and maximum expiry values
+    tempExpiresString.remove(0);
+    pOsConfigDb->get("SIP_REGISTRAR_MIN_EXPIRES_TLS", tempExpiresString);
+    if ( tempExpiresString.isNull() )
+    {
+        mTLSExpiryIntervals.mMinExpiresTime = MIN_EXPIRES_TIME_TLS;
+    }
+    else
+    {
+        mTLSExpiryIntervals.mMinExpiresTime = atoi(tempExpiresString.data());
+        if ( mTLSExpiryIntervals.mMinExpiresTime < HARD_MINIMUM_EXPIRATION )
+        {
+           Os::Logger::instance().log(FAC_SIP, PRI_WARNING,
+                         "SipRegistrarServer "
+                         "configured minimum for SIP_REGISTRAR_MIN_EXPIRES_TLS (%d) < hard minimum (%d); set to hard minimum",
+                         mTLSExpiryIntervals.mMinExpiresTime, HARD_MINIMUM_EXPIRATION);
+           mTLSExpiryIntervals.mMinExpiresTime = HARD_MINIMUM_EXPIRATION;
+        }
+    }
+
+    tempExpiresString.remove(0);
+    pOsConfigDb->get("SIP_REGISTRAR_MAX_EXPIRES_TLS", tempExpiresString);
+    if ( tempExpiresString.isNull() )
+    {
+       mTLSExpiryIntervals.mMaxExpiresTime = MAX_EXPIRES_TIME_TLS;
+    }
+    else
+    {
+       mTLSExpiryIntervals.mMaxExpiresTime = atoi(tempExpiresString.data());
+       if ( mTLSExpiryIntervals.mMaxExpiresTime < mTLSExpiryIntervals.mMinExpiresTime )
+       {
+          Os::Logger::instance().log(FAC_SIP, PRI_WARNING,
+                        "SipRegistrarServer "
+                        "configured maximum for SIP_REGISTRAR_MAX_EXPIRES_TLS (%d) < minimum (%d); set to minimum",
+                        mTLSExpiryIntervals.mMaxExpiresTime, mTLSExpiryIntervals.mMinExpiresTime
+                        );
+          mTLSExpiryIntervals.mMaxExpiresTime = mTLSExpiryIntervals.mMinExpiresTime;
        }
     }
 
@@ -251,6 +294,10 @@ SipRegistrarServer::initialize(
        }
     }
 
+    mTlsExpires = pOsConfigDb->getBoolean("SIP_REGISTRAR_EXPIRES_TLS", FALSE);
+    Os::Logger::instance().log(FAC_SIP, PRI_INFO,
+                  "SipRegistrarServer::initialize SIP_REGISTRAR_EXPIRES_TLS is %s",
+                  mTlsExpires ? "Enabled" : "Disabled");
 
     // This is a developer-only configuration parameter
     // to prevent sending an Expires header in REGISTER responses
@@ -334,6 +381,10 @@ SipRegistrarServer::applyRegisterToDirectory( const Url& toUrl
     if( isRegistrantBehindNat( registerMessage ) )
     {
        pExpiryIntervals = &mNatedExpiryIntervals;
+    } 
+    else if(mTlsExpires && isRegistrantUsingTLS( registerMessage ) )
+    {
+       pExpiryIntervals = &mTLSExpiryIntervals;
     }
     else
     {
@@ -1553,6 +1604,25 @@ bool SipRegistrarServer::isRegistrantBehindNat( const SipMessage& registerReques
       }
    }
    return bIsBehindNat;
+}
+
+
+// inspect the send protocol for the register request if SSL_SOCKET. If not check
+// the Requests Line if transport is TLS or the scheme is sips.
+bool SipRegistrarServer::isRegistrantUsingTLS( const SipMessage& registerRequest ) const
+{
+  UtlString address;
+  UtlString protocol;
+  int port = 0;
+
+  bool bIsTLS = false;
+  registerRequest.getBottomVia(&address, &port, &protocol);
+  if (protocol.compareTo("tls", UtlString::ignoreCase) == 0) 
+  {
+    bIsTLS = true;
+  }
+
+  return bIsTLS;
 }
 
 SipRegistrarServer::~SipRegistrarServer()

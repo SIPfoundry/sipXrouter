@@ -1011,6 +1011,23 @@ public:
                    UtlBoolean* maddrSet = NULL,
                    UtlBoolean* receivedPortSet = NULL) const;
 
+    void getBottomVia(UtlString* viaAddress,
+                   int* viaPort,
+                   UtlString* protocol,
+                   int* recievedPort = NULL,
+                   UtlBoolean* receivedSet = NULL,
+                   UtlBoolean* maddrSet = NULL,
+                   UtlBoolean* receivedPortSet = NULL) const;
+
+    void getVia(UtlString* viaAddress,
+                   int* viaPort,
+                   UtlString* protocol,
+                   int subFieldIndex,
+                   int* recievedPort = NULL,
+                   UtlBoolean* receivedSet = NULL,
+                   UtlBoolean* maddrSet = NULL,
+                   UtlBoolean* receivedPortSet = NULL) const;
+
     UtlBoolean removeTopVia();
 
     /// Get the To header as a character string.
