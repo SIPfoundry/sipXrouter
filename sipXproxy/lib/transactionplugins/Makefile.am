@@ -31,3 +31,24 @@ libGatewayDestPlugin_la_LIBADD = \
 	-lboost_system-mt \
 	@SIPXPORT_LIBS@ \
 	@SIPXCOMMSERVER_LIBS@
+	
+transactionplugins_LTLIBRARIES = \
+    libCallerIdMasking.la
+
+libCallerIdMasking_la_SOURCES = \
+	CallerIdMasking.h \
+	CallerIdMasking.cpp
+
+libCallerIdMasking_la_CXXFLAGS = \
+	-I$(top_builddir)/config \
+	-I$(top_srcdir)/include \
+    -DSIPX_CONFDIR=\"@SIPX_CONFDIR@\"
+
+libCallerIdMasking_la_LDFLAGS = \
+    -module \
+    -version-info ${version_Current}:${version_Revision}:${version_Age}
+
+libCallerIdMasking_la_LIBADD = \
+	-lboost_system-mt \
+	@SIPXPORT_LIBS@ \
+	@SIPXCOMMSERVER_LIBS@
