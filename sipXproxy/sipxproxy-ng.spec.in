@@ -112,6 +112,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_libdir}/authplugins/libTransferControl.so*
 %attr(755,root,root) %{_libdir}/libsipXproxy.so*
 %attr(755,root,root) %{_libdir}/transactionplugins/libGatewayDestPlugin.so*
+%attr(755,root,root) %{_libdir}/transactionplugins/libCallerIdMasking.so*
 
 %files devel
 %defattr(644,root,root,755)
