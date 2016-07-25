@@ -12,7 +12,8 @@ version_Age=0
 
 transactionpluginsdir = $(SIPX_LIBDIR)/transactionplugins
 transactionplugins_LTLIBRARIES = \
-    libGatewayDestPlugin.la
+	libGatewayDestPlugin.la \
+	libCallerIdMasking.la
 
 libGatewayDestPlugin_la_SOURCES = \
 	GatewayDestPlugin.h \
@@ -31,9 +32,6 @@ libGatewayDestPlugin_la_LIBADD = \
 	-lboost_system-mt \
 	@SIPXPORT_LIBS@ \
 	@SIPXCOMMSERVER_LIBS@
-	
-transactionplugins_LTLIBRARIES = \
-    libCallerIdMasking.la
 
 libCallerIdMasking_la_SOURCES = \
 	CallerIdMasking.h \

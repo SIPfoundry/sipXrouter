@@ -72,7 +72,7 @@ Requires: %name
 Group: Development/Libraries
 Vendor: SIPfoundry
 Summary: Internal documentation for %name
-Requires: sipxcommserverlib-devel >= %version
+Requires: sipxcommserverlib-ng-devel >= %version
 
 %description devel
 Internal class documentation for the proxy classes
@@ -128,6 +128,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/libsipXproxy.la
 %{_includedir}/sipxproxy/*
 %{_libdir}/transactionplugins/libGatewayDestPlugin.la
+%{_libdir}/transactionplugins/libCallerIdMasking.la
 
 %post
 setcap 'CAP_SYS_RESOURCE=+ep' %{_bindir}/sipXproxy
