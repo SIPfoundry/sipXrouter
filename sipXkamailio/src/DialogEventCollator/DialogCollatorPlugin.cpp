@@ -83,7 +83,7 @@ extern "C" int collate_plugin_init(str* key, str* value, int size)
           OSS::logger_init(log_path, static_cast<OSS::LogPriority>(log_priority));
         } catch(std::exception & ex)
         {
-          return -1;
+          //Don't returned error here other plugin may already init oss logger
         }
       }
 

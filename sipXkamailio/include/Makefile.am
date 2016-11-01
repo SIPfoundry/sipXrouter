@@ -8,6 +8,8 @@ nobase_include_HEADERS = \
     xmlparser/tinyxml.h \
     DialogEventCollator/DialogInfo.h \
     DialogEventCollator/DialogCollator.h \
-    DialogEventCollator/DialogCollatorPlugin.h
+    DialogEventCollator/DialogCollatorPlugin.h \
+    MessageQueue/MessageQueuePlugin.h \
+    MessageQueue/RedisSubscribeQueue.h
 
 DISTCLEANFILES = Makefile.in

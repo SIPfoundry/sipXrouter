@@ -815,7 +815,7 @@ SipRegistrarServer::applyRegisterToDirectory( const Url& toUrl
                     RegisterPlugin* plugin;
                     while ((plugin = static_cast<RegisterPlugin*>(plugins.next())))
                     {
-                       plugin->takeAction(registerMessage, spreadExpirationTime, mSipUserAgent );
+                       plugin->takeAction(registerMessage, isUnregister ? 0 : spreadExpirationTime, mSipUserAgent );
                     }
                 }
             }

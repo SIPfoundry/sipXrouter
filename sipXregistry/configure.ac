@@ -18,6 +18,7 @@ CHECK_CPPUNIT
 SFAC_LIB_CALL
 SFAC_LIB_COMMSERVER
 SFAC_FEATURE_SIP_TLS
+SFAC_LIB_OSS_CORE
 CHECK_GIPSNEQ
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([src/Makefile])
@@ -33,4 +34,6 @@ AC_CONFIG_FILES([lib/redirect_plugins/test/Makefile])
 AC_CONFIG_FILES([lib/register_plugins/Makefile])
 AC_CONFIG_FILES([lib/register_plugins/mwi/Makefile])
 AC_CONFIG_FILES([lib/register_plugins/mwi/test/Makefile])
+AC_CONFIG_FILES([lib/register_plugins/bla/Makefile])
+AC_CONFIG_FILES([lib/register_plugins/bla/test/Makefile])
 AC_OUTPUT

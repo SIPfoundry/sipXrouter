@@ -14,7 +14,7 @@
 
 using namespace std;
 
-const char* gLocalHostAddr = "localhost";
+const char* gLocalHostAddr = "127.0.0.1";
 const char* gTestEntityDbName = "test.EntityDBTest";
 const char* gLocalOplogDbName = "local.oplog";
 const char* gMongoSetOperator = "$set";
@@ -24,6 +24,7 @@ typedef struct
 {
   const char* pUserId;
   const char* pIdentity;
+  const char* pShared;
   const char* pRealm;
   const char* pPassword;
   const char* pPin;
@@ -36,6 +37,7 @@ EntityRecordTestData entityRecordTestData[] =
   {
     "userId",
     "identity@atlanta.com",
+    "shared@atlanta.com",
     "realm",
     "password",
     "pin",
@@ -203,7 +205,7 @@ class EntityDBTest: public CppUnit::TestCase
   int MAX_SECONDS_TO_WAIT;
   MongoDbVerifier _mongoDbVerifier;
 public:
-  EntityDBTest() : _info(MongoDB::ConnectionInfo(mongo::ConnectionString(mongo::HostAndPort(gLocalHostAddr)))),
+  EntityDBTest() : _info(MongoDB::ConnectionInfo::globalInfo()),
               _entityDbName(gTestEntityDbName),
               _oplogDbName(gLocalOplogDbName),
               _entityRecord(new EntityRecord),
@@ -251,6 +253,7 @@ public:
     mongo::BSONObjBuilder bsonObjBuilder;
     bsonObjBuilder << entityRecord.userId_fld() << entityRecord.userId() <<                                           // "uid"
         entityRecord.identity_fld() << entityRecord.identity() <<                                       // "ident"
+        entityRecord.shared_fld() << entityRecord.shared() <<                                           // "shared"
         entityRecord.realm_fld() << entityRecord.realm() <<                                             // "rlm"
         entityRecord.password_fld() << entityRecord.password() <<                                       // "pstk"
         entityRecord.pin_fld() << entityRecord.pin() <<                                                 // "pntk"
@@ -297,6 +300,7 @@ public:
   {
     entityRecord._userId = entityRecordTestData[0].pUserId;
     entityRecord._identity = entityRecordTestData[0].pIdentity;
+    entityRecord._shared = entityRecordTestData[0].pShared;
     entityRecord._realm = entityRecordTestData[0].pRealm;
     entityRecord._password = entityRecordTestData[0].pPassword;
     entityRecord._pin = entityRecordTestData[0].pPin;
@@ -318,6 +322,7 @@ public:
   {
     CPPUNIT_ASSERT(string(entityRecordTestData[0].pUserId) == entityRecord.userId());
     CPPUNIT_ASSERT(string(entityRecordTestData[0].pIdentity) == entityRecord.identity());
+    CPPUNIT_ASSERT(string(entityRecordTestData[0].pShared) == entityRecord.shared());
     CPPUNIT_ASSERT(string(entityRecordTestData[0].pRealm) == entityRecord.realm());
     CPPUNIT_ASSERT(string(entityRecordTestData[0].pPassword) == entityRecord.password());
     CPPUNIT_ASSERT(string(entityRecordTestData[0].pPin) == entityRecord.pin());

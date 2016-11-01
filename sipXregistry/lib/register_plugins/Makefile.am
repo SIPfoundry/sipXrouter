@@ -1,2 +1,2 @@
 
-SUBDIRS = mwi
+SUBDIRS = mwi bla

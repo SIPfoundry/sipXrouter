@@ -53,6 +53,8 @@ const char* EntityRecord::staticUserLocCallId_fld(){ static std::string fld = "c
 
 const char* EntityRecord::vmOnDnd_fld(){ static std::string fld = "vmondnd"; return fld.c_str(); };
 
+const char* EntityRecord::shared_fld(){ static std::string fld = "shared"; return fld.c_str(); }
+
 EntityRecord::EntityRecord()
 {
     _callForwardTime = 0;
@@ -77,6 +79,7 @@ EntityRecord::EntityRecord(const EntityRecord& entity)
     _callForwardTime = entity._callForwardTime;
     _staticUserLoc = entity._staticUserLoc;
     _vmOnDnd = entity._vmOnDnd;
+    _shared = entity._shared;    
 }
 
 EntityRecord::~EntityRecord()
@@ -108,6 +111,7 @@ void EntityRecord::swap(EntityRecord& entity)
     std::swap(_callForwardTime, entity._callForwardTime);
     std::swap(_staticUserLoc, entity._staticUserLoc);
     std::swap(_vmOnDnd, entity._vmOnDnd);
+    std::swap(_shared, entity._shared);
 }
 
 void EntityRecord::fillStaticUserLoc(StaticUserLoc& userLoc, const mongo::BSONObj& innerObj)
@@ -171,6 +175,11 @@ EntityRecord& EntityRecord::operator = (const mongo::BSONObj& bsonObj)
 	if (bsonObj.hasField(EntityRecord::vmOnDnd_fld()))
 	{
 		_vmOnDnd = bsonObj.getBoolField(EntityRecord::vmOnDnd_fld());
+	}
+
+    if (bsonObj.hasField(EntityRecord::shared_fld()))
+	{
+		_shared = bsonObj.getStringField(EntityRecord::shared_fld());
 	}
 
 	if (bsonObj.hasField(EntityRecord::callerId_fld()))

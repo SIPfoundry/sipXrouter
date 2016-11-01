@@ -30,7 +30,8 @@ nobase_lib_LTLIBRARIES = \
     authplugins/libRequestLinter.la \
     authplugins/libMSFT_ExchangeTransferHack.la \
     authplugins/libSubscriptionAuth.la \
-    authplugins/libCallDestination.la
+    authplugins/libCallDestination.la \
+    authplugins/libPagingAlert.la
 
 authplugins_libCallerAlias_la_SOURCES = \
     CallerAlias.h \
@@ -151,6 +152,21 @@ authplugins_libCallDestination_la_LIBADD = \
     @SIPXCOMMSERVER_LIBS@ \
     -lmongoclient \
     -lboost_system-mt
+
+authplugins_libPagingAlert_la_SOURCES = \
+    PagingAlert.h \
+    PagingAlert.cpp
+
+authplugins_libPagingAlert_la_CXXFLAGS = \
+    $(AUTHPLUGIN_COMMON_CXX_FLAGS)
+
+authplugins_libPagingAlert_la_LDFLAGS = \
+    $(AUTHPLUGIN_COMMON_LD_FLAGS)
+
+authplugins_libPagingAlert_la_LIBADD = \
+    @SIPXCOMMSERVER_LIBS@ \
+    -lmongoclient \
+    -lboost_system-mt    
 
 authplugins_libEmergencyLineIdentifier_la_SOURCES = \
     EmergencyLineIdentifier.h \

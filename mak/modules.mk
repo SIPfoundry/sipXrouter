@@ -14,7 +14,7 @@ sipx_core = \
   sipXproxy \
   sipXpublisher \
   sipXregistry \
-  sipXkamailio 
+  sipXkamailio
 
 #additional configure options for sipXresiprocate package
 sipXresiprocate_OPTIONS = --with-c-ares --with-ssl --with-repro --enable-ipv6 --with-tfm
@@ -29,5 +29,6 @@ sipXcommserverLib_DEPS = sipXtackLib
 sipXproxy_DEPS = sipXcommserverLib 
 sipXregistry_DEPS = sipXcommserverLib
 sipXtools_DEPS = sipXtackLib sipXcommserverLib
+sipXkamailio = oss_core sipXcommserverLib
 
 all = $(sipx)

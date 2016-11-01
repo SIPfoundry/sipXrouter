@@ -203,6 +203,12 @@ public:
     //
     static const char* vmOnDnd_fld();
     bool& vmOnDnd();
+
+    //
+    // BLA/SLA Shared Id of the user
+    //
+    std::string& shared();
+    static const char* shared_fld();
 private:
     void fillStaticUserLoc(StaticUserLoc& userLoc, const mongo::BSONObj& innerObj);
 
@@ -225,6 +231,8 @@ private:
     std::vector<Alias> _aliases;
     std::vector<StaticUserLoc> _staticUserLoc;
     bool _vmOnDnd;
+
+    std::string _shared;
 };
 
 //
@@ -310,6 +318,11 @@ inline std::vector<EntityRecord::StaticUserLoc>& EntityRecord::staticUserLoc()
 inline bool& EntityRecord::vmOnDnd()
 {
   return _vmOnDnd;
+}
+
+inline std::string& EntityRecord::shared()
+{
+    return _shared;
 }
 
 #endif	/* ENTITYRECORD_H */
