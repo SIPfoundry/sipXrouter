@@ -75,6 +75,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_bindir}/sipregistrar
 %attr(755,root,root) %{_bindir}/sipXregTool
 %attr(755,root,root) %{_libdir}/libRegistrarImpliedMWI.so*
+%attr(755,root,root) %{_libdir}/libRegistrarBlaQueueEvent.so*
 %attr(755,root,root) %{_libdir}/libRedirectorAliasDB.so*
 %attr(755,root,root) %{_libdir}/libRedirectorAuthRouter.so*
 %attr(755,root,root) %{_libdir}/libRedirectorENUM.so*
@@ -111,6 +112,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/libRedirectorTimeOfDay.la
 %{_libdir}/libRedirectorUserParam.la
 %{_libdir}/libRegistrarImpliedMWI.la
+%{_libdir}/libRegistrarBlaQueueEvent.la
 %dir %{_includedir}/registry
 %{_includedir}/registry/*
 
