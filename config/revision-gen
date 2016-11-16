@@ -5,7 +5,7 @@
 # the revision.  Source build therefore should save revision into the tarball
 
 if [ "$#" == "0" ]; then
-    VERSION="2016.02"
+    VERSION="2016.11"
 else
     VERSION=$1
 fi
