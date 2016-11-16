@@ -75,6 +75,7 @@ rm -rf $RPM_BUILD_ROOT
 %exclude %{_libdir}/libdialogEventCollator.la
 %exclude %{_libdir}/libRedisMessageQueue.la
 %exclude %{_bindir}/dialog_event_collator_unit_test
+%exclude %{_bindir}/redis_subscribe_queue_unit_test
 
 %changelog
 

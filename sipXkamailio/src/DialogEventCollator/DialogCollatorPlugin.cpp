@@ -110,8 +110,7 @@ extern "C" int collate_handle_init(void** handle)
   DialogCollator * dialogCollator = new DialogCollator();
   if(!dialogCollator->connect())
   {
-    OSS_LOG_ERROR("[Plugin] Unable to allocate dialog collator handle.");
-    return -1;
+    OSS_LOG_WARNING("[Plugin] Unable to connect to redis.");
   }
 
   *handle = reinterpret_cast<void*>(dialogCollator);
