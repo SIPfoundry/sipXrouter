@@ -18,6 +18,7 @@ sipx_core = \
 
 #additional configure options for sipXresiprocate package
 sipXresiprocate_OPTIONS = --with-c-ares --with-ssl --with-repro --enable-ipv6 --with-tfm
+oss_core_OPTIONS = --enable-all-features
 
 sipx_all =   $(sipx_core)
 
