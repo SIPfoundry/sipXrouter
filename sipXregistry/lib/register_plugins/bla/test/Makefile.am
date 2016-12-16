@@ -11,8 +11,7 @@ testsuite_LDADD = \
 	@SIPXUNIT_LIBS@ \
 	@SIPXCOMMSERVER_LIBS@ \
 	@OSSCORE_LIBS@ \
-	${prefix}/opt/ossapp/libre/lib/libre.a \
-	${prefix}/opt/ossapp/librem/lib/librem.a \
+	@OSS_CORE_DEP_LIBS@ \
 	-lmongoclient \
 	-ltcmalloc \
         -lpthread  \

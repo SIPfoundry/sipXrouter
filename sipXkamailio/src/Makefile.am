@@ -18,8 +18,6 @@ libdialogEventCollator_la_LDFLAGS = \
 
 libdialogEventCollator_la_LIBADD = \
 	@OSSCORE_LIBS@ \
-	${prefix}/opt/ossapp/libre/lib/libre.a \
-	${prefix}/opt/ossapp/librem/lib/librem.a \
 	-ltcmalloc \
         -lpthread  \
         -lstdc++ \
@@ -52,8 +50,6 @@ libRedisMessageQueue_la_LDFLAGS = \
 
 libRedisMessageQueue_la_LIBADD = \
 	@OSSCORE_LIBS@ \
-	${prefix}/opt/ossapp/libre/lib/libre.a \
-	${prefix}/opt/ossapp/librem/lib/librem.a \
 	-ltcmalloc \
         -lpthread  \
         -lstdc++ \
@@ -61,7 +57,8 @@ libRedisMessageQueue_la_LIBADD = \
         -lboost_thread-mt \
         -lboost_filesystem-mt \
         -lboost_program_options-mt \
-        -levent
+        -levent \
+        -lhiredis
 
 # this is helpful if you're debugging something with lots of inlines (like the UtlLink code)
 # 		-fno-gcse -O0 -fno-implement-inlines -fno-default-inline
@@ -91,6 +88,7 @@ dialog_event_collator_unit_test_SOURCES = \
 	
 dialog_event_collator_unit_test_LDADD = \
 	${libdialogEventCollator_la_LIBADD} \
+	-lgtest \
 	libdialogEventCollator.la
 
 redis_subscribe_queue_unit_test_CXXFLAGS = \
@@ -103,6 +101,7 @@ redis_subscribe_queue_unit_test_SOURCES = \
 	
 redis_subscribe_queue_unit_test_LDADD = \
 	${libRedisMessageQueue_la_LIBADD} \
+	-lgtest \
 	libRedisMessageQueue.la	
 
 DISTCLEANFILES = Makefile.in

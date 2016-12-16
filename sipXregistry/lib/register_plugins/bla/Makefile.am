@@ -24,8 +24,6 @@ libRegistrarBlaQueueEvent_la_LDFLAGS = \
 libRegistrarBlaQueueEvent_la_LIBADD = \
 	@SIPXCOMMSERVER_LIBS@ \
 	@OSSCORE_LIBS@ \
-	${prefix}/opt/ossapp/libre/lib/libre.a \
-	${prefix}/opt/ossapp/librem/lib/librem.a \
 	-ltcmalloc \
         -lpthread  \
         -lstdc++ \
