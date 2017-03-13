@@ -16,9 +16,12 @@
 
 #include "DialogEventCollator/DialogCollator.h"
 #include <boost/unordered_map.hpp>
+#include <boost/algorithm/string.hpp>
 #include <OSS/UTL/Logger.h>
+
 #include <vector>
 #include <map>
+#include <set>
 
 /*
  * TODO:
@@ -28,398 +31,475 @@
  * the kamailio if the remote trigger uri is MOH. Need to provide a better
  * solution for handling the moh in kamailio rather than using this hack
  */
-#define ENABLE_MOH_FILTER = 1
+#define ENABLE_MOH_FILTER 1
+
+/*Update object version if DialogInfoEvent structure has changed*/
+#define DIALOG_OBJECT_VERSION "v2.0.0"
 
 namespace SIPX {
 namespace Kamailio {
 namespace Plugin {
 
-DialogCollator::DialogCollator() 
+struct FullKeyGenerator
 {
-    
-}
+  std::string user;
+  std::string domain;
 
-DialogCollator::~DialogCollator() 
+  FullKeyGenerator(const std::string & dialogUser, const std::string & dialogDomain)
+    : user(dialogUser)
+    , domain(dialogDomain) {}
+
+  std::string operator()(const DialogEvent & dialogEvent) const
+  {
+    std::ostringstream stream;
+    stream << user << "@" << domain << ":" << dialogEvent.dialogId();
+    if(dialogEvent.dialogDirection() == DIRECTION_INITIATOR)
+    {
+      stream << ":" << dialogEvent.dialogElement().localTag << ":"
+        << dialogEvent.dialogElement().remoteTag;
+    } else if(dialogEvent.dialogDirection() == DIRECTION_RECIPIENT)
+    {
+      stream << ":" << dialogEvent.dialogElement().remoteTag << ":"
+        << dialogEvent.dialogElement().localTag;
+    }
+
+    return stream.str();
+  }
+}; // struct FullKeyGenerator
+
+struct TagKeyGenerator
 {
-     
-}
+  std::string user;
+  std::string domain;
 
-bool DialogCollator::connect(const std::string& password, int db)
+  TagKeyGenerator(const std::string & dialogUser, const std::string & dialogDomain)
+    : user(dialogUser)
+    , domain(dialogDomain) {}
+
+  std::string operator()(const DialogEvent & dialogEvent) const
+  {
+    std::ostringstream stream;
+    stream << user << "@" << domain << ":" << dialogEvent.dialogId();
+    if(dialogEvent.dialogDirection() == DIRECTION_INITIATOR)
+    {
+      stream << ":" << dialogEvent.dialogElement().localTag;
+    } else if(dialogEvent.dialogDirection() == DIRECTION_RECIPIENT)
+    {
+      stream << ":" << dialogEvent.dialogElement().remoteTag;
+    }
+
+    return stream.str();
+  }
+}; // struct TagKeyGenerator
+
+struct DialogKeyGenerator
+{
+  std::string user;
+  std::string domain;
+
+  DialogKeyGenerator(const std::string & dialogUser, const std::string & dialogDomain)
+    : user(dialogUser)
+    , domain(dialogDomain) {}
+
+  std::string operator()(const DialogEvent & dialogEvent) const
+  {
+    std::ostringstream stream;
+    stream << user << "@" << domain << ":" << dialogEvent.dialogId();
+    return stream.str();
+  }
+}; // struct DialogKeyGenerator
+
+/**
+ * Global Functions
+ */
+
+template<class KeyGenerator>
+void collateBy(const std::list<const DialogEvent*> & dialogEvents
+  , DialogPriority priority
+  , std::list<const DialogEvent*> & collatedEvents
+  , KeyGenerator keyGenerator);
+
+void collateWinningNode(const std::list<DialogCollateEvent> & dialogEvents
+  , DialogPriority priority
+  , std::list<const DialogEvent*> & collatedEvents);
+
+bool convertToJson(const DialogEvent & dialogEvent, json::Object& object);
+bool convertFromJson(const json::Object& object, DialogEvent & dialogEvent);
+
+/**
+ * class DialogCollatorAndAggregator
+ */
+
+bool DialogCollatorAndAggregator::connect(const std::string& password, int db)
 {
   OSS_LOG_INFO("[DialogCollator] Connecting to Redis Server.");
   return _redisClient.connect(password, db);
 }
 
-void DialogCollator::disconnect()
+void DialogCollatorAndAggregator::disconnect()
 {
   OSS_LOG_INFO("[DialogCollator] Disconnecting to Redis Server.");
   _redisClient.disconnect();
 }
 
-/*
- * Kamailio will send a multiple payload on which it may contains multiple state 
- * within the same dialog. Finalize the state of each dialog.
- */
-bool DialogCollator::collateLocalPayloads(const std::string & user, const std::string & domain
-        , const std::vector<std::string> & payloads
-        , CollatedDialogs & collatedDialogs)
+bool DialogCollatorAndAggregator::collateAndAggregate(const std::string & user, const std::string & domain
+  , const std::list<std::string> & payloads, std::string & xml)
 {
-  boost::unordered_map<std::string, DialogInfo> collatedDialogMap;
-  for(std::vector<std::string>::const_iterator iter = payloads.begin()
-          ; iter != payloads.end()
-          ; ++iter)
+  if(!payloads.empty())
   {
-    DialogInfo dialogInfo;
-    if(parseDialogInfoXML(*iter, dialogInfo))
+    DialogEvents dialogEvents;
+    if(parse(user, domain, payloads, dialogEvents))
     {
-      if(dialogInfo.valid())
-      {
-
-#ifdef ENABLE_MOH_FILTER
-          if(!dialogInfo.dialog.remoteTarget.empty() && 
-              dialogInfo.dialog.remoteTarget.find("~~mh~") != std::string::npos)
-          {
-            OSS_LOG_WARNING("[DialogCollator] Collate: Ignoring state for moh event: " 
-                    << dialogInfo.dialog.id << ": " << dialogInfo.dialog.state);
-            continue;
-          }
-#endif
-
-          std::string key = generateKey(user, domain, dialogInfo.dialog);
-          boost::unordered_map<std::string, DialogInfo>::iterator mapIter = collatedDialogMap.find(key);
-          if(mapIter != collatedDialogMap.end()) 
-          {
-            if(compareDialogByState(dialogInfo.dialog, mapIter->second.dialog) >= 0)
-            {
-                OSS_LOG_DEBUG("[DialogCollator] Collate: Update local state: " 
-                    << key << ": " << mapIter->second.dialog.state << "->" << dialogInfo.dialog.state);
-                collatedDialogMap[key] = dialogInfo;
-            } else
-            {
-                OSS_LOG_DEBUG("[DialogCollator] Collate: Ignore local state: " 
-                    << key << ": " << mapIter->second.dialog.state << "->" << dialogInfo.dialog.state);
-            }
-          } else {
-            OSS_LOG_DEBUG("[DialogCollator] Collate: New local state: " 
-                    << key << ": " << dialogInfo.dialog.state);
-            collatedDialogMap[key] = dialogInfo;
-          }
-      } else {
-          OSS_LOG_WARNING("[DialogCollator] Collate: Invalid local state: " 
-              << dialogInfo.dialog.id << ": " << dialogInfo.dialog.state);       
-      }
-    } else
-    {
-        OSS_LOG_ERROR("[DialogCollator] Collate: Parse error: " << *iter);
+      return collateAndAggregate(user, domain, dialogEvents, xml);  
     }
   }
+  
+  return false;
+}
+
+bool DialogCollatorAndAggregator::collateAndAggregate(const std::string & user, const std::string & domain
+    , const DialogEvents & dialogEvents, std::string & xml)
+{
+  DialogEventsPtr dialogEventPtr;
+  for(DialogEvents::const_iterator iter = dialogEvents.begin(); iter != dialogEvents.end(); ++iter)
+  {
+    dialogEventPtr.push_back(&(*iter));
+  }
+
+  return collateAndAggregate(user, domain, dialogEventPtr, xml);
+}
+
+bool DialogCollatorAndAggregator::collateAndAggregate(const std::string & user, const std::string & domain
+    , const DialogEventsPtr & dialogEvents, std::string & xml)
+{
+  DialogEventsPtr collateDialogEvent;
+  collate(user, domain, dialogEvents, collateDialogEvent);
+  aggregate(user, domain, collateDialogEvent, xml);
+  return !xml.empty();
+}
+
+bool DialogCollatorAndAggregator::parse(const std::string & user, const std::string & domain
+  , const std::list<std::string> & payloads, DialogEvents & dialogEvents)
+{
+  dialogEvents.clear();
+
+  std::set<std::string> dialogIds;
+  FullKeyGenerator keyGenerator(user, domain);
+  for(std::list<std::string>::const_iterator iter = payloads.begin(); iter != payloads.end(); ++iter)
+  {
+    DialogEvent dialogEvent((*iter));
+    if(dialogEvent.valid() 
+      && dialogEvent.dialogState() != STATE_INVALID
+      && dialogEvent.dialogState() != STATE_TRYING)
+    {
+      dialogEvents.push_back(dialogEvent);
+      dialogIds.insert(keyGenerator(dialogEvent));
+    }
+  }
+
+  /** Add Dialog from previous events **/
+  for(std::set<std::string>::iterator iter = dialogIds.begin(); iter != dialogIds.end(); ++iter)
+  {
+    DialogEvent dialogEvent;
+    if(loadDialogEvent((*iter), dialogEvent))
+    {
+      if(dialogEvent.valid() 
+        && dialogEvent.dialogState() != STATE_INVALID
+        && dialogEvent.dialogState() != STATE_TRYING)
+      { 
+        dialogEvents.push_back(dialogEvent);
+      }
+    }
+  }
+
+  return !dialogEvents.empty();
+}
+
+void DialogCollatorAndAggregator::collate(const std::string & user, const std::string & domain
+  , const DialogEventsPtr & dialogEvents, DialogEventsPtr & collatedEvents)
+{
+  FullKeyGenerator keyGenerator(user, domain);
+  collateBy(dialogEvents, PRIORITY_BY_CALL, collatedEvents, keyGenerator);
 
   /**
-   * Only add collated local state
+   * Save full collated state to redis
    */
-  for(boost::unordered_map<std::string, DialogInfo>::iterator iter = collatedDialogMap.begin()
-      ; iter != collatedDialogMap.end()
-      ; ++iter)
+  for(DialogEventsPtr::iterator iter = collatedEvents.begin(); iter != collatedEvents.end(); ++iter)
   {
-      collatedDialogs.push_back(iter->second);
-  }
-
-  return !collatedDialogs.empty();
-}
-
-/*
- * Compare and finalize the state of each dialog against the states in Redis
- */
-bool DialogCollator::collateRemotePayloads(const std::string & user, const std::string & domain
-        , CollatedDialogs & collatedDialogs)
-{
-  bool result = false;
-  for(CollatedDialogs::iterator iter = collatedDialogs.begin()
-          ; iter != collatedDialogs.end()
-          ; ++iter)
-  {
-    if(iter->valid()) 
+    std::string key = keyGenerator(*(*iter));
+    if(!saveDialogEvent(key, *(*iter)))
     {
-      DialogInfo currentDialogInfo;
-
-      std::string key = generateKey(user, domain, iter->dialog);
-      if(getDialogInfo(key, currentDialogInfo))
-      {
-        if(compareDialogByState(iter->dialog, currentDialogInfo.dialog) >= 0)
-        {
-            OSS_LOG_INFO("[DialogCollator] Collate: Update remote state: " 
-                    << key << ": " << currentDialogInfo.dialog.state << "->" << iter->dialog.state);
-            setDialogInfo(key, *iter);
-        } else {
-            OSS_LOG_INFO("[DialogCollator] Collate: Ignore remote state: " 
-                    << key << ": " << currentDialogInfo.dialog.state << "<-" << iter->dialog.state);
-            *iter = currentDialogInfo; // Replace it with updated dialog state
-        }
-      } else 
-      {
-        OSS_LOG_INFO("[DialogCollator] Collate: New remote state: " 
-                << key << ": ->" << iter->dialog.state);
-        setDialogInfo(key, *iter);
-      }
-
-      result = true;
-    } else 
-    {
-      OSS_LOG_ERROR("[DialogCollator] Collate: Invalid remote state: " 
-                  << iter->dialog.id << ": payload ->" << iter->rawPayload);
+      OSS_LOG_WARNING("[DialogCollatorAndAggregator] Failed to save dialog event: " 
+        << (*iter)->dialogId() << " : " << (*iter)->dialogState());
     }
   }
 
-  return result;    
+  collateBy(collatedEvents, PRIORITY_BY_DIALOG, collatedEvents, TagKeyGenerator(user, domain));
+  collateBy(collatedEvents, PRIORITY_BY_DIALOG, collatedEvents, DialogKeyGenerator(user, domain));
 }
 
-/*
- * Aggregate the state of all collated dialog by dialog.id 
- */
-void DialogCollator::aggregateLocalPayloads(const std::string & user, const std::string & domain
-        , const CollatedDialogs & collatedDialogs
-        , AggregatedDialogs & aggregateDialogs)
+void DialogCollatorAndAggregator::aggregate(const std::string & user, const std::string & domain
+  , const DialogEventsPtr & dialogEvents, std::string & xml)
 {
-  for(CollatedDialogs::const_iterator iter = collatedDialogs.begin()
-          ; iter != collatedDialogs.end()
-          ; ++iter)
-  {
-    AggregatedDialogs::iterator mapIter = aggregateDialogs.find(iter->dialog.id);
-    if(mapIter != aggregateDialogs.end()) 
-    {
-      if(compareDialogByPreference(iter->dialog, mapIter->second.dialog) >= 0)
-      {
-        OSS_LOG_DEBUG("[DialogCollator] Aggregate: Update local state: " 
-            << iter->dialog.id << ": from " << mapIter->second.dialog.state << " to " << iter->dialog.state);
-        aggregateDialogs[iter->dialog.id] = *iter;
-      } else {
-        OSS_LOG_DEBUG("[DialogCollator] Aggregate: Ignore local state: " 
-            << iter->dialog.id << ": from " << mapIter->second.dialog.state << " to " << iter->dialog.state);
-      }
-    } else 
-    {
-        OSS_LOG_DEBUG("[DialogCollator] Aggregate: New local state for key: " 
-            << iter->dialog.id << ": to " << iter->dialog.state);
-        aggregateDialogs[iter->dialog.id] = *iter;
-    }
-  }
-}
+  DialogEvents activeEvents;
+  DialogAggregateEvent aggregateEvent;
 
-/*
- * Aggregate the state of all collated dialog including the non terminated state found in Redis.
- */
-bool DialogCollator::aggregateRemotePayloads(const std::string & user, const std::string & domain
-    , AggregatedDialogs & aggregateDialogs)
-{
-  CollatedDialogs dialogInfos;
-  if(getAllDialogInfo(user, domain, dialogInfos) && !dialogInfos.empty())
-  {
-    for(CollatedDialogs::iterator iter = dialogInfos.begin()
-            ; iter != dialogInfos.end()
-            ; ++iter)
-    {
-      AggregatedDialogs::iterator mapIter = aggregateDialogs.find(iter->dialog.id);
-      if(mapIter != aggregateDialogs.end()) 
-      {
-        if(compareDialogByPreference(iter->dialog, mapIter->second.dialog) >= 0)
-        {
-          OSS_LOG_INFO("[DialogCollator] Aggregate: Candidate state: " 
-              << iter->dialog.id << ": from " << mapIter->second.dialog.state << " to " << iter->dialog.state);
-          aggregateDialogs[iter->dialog.id] = *iter;
-        } else
-        {
-          OSS_LOG_INFO("[DialogCollator] Aggregate: Reject state: " 
-              << iter->dialog.id << ": from " << mapIter->second.dialog.state << " to " << iter->dialog.state);
-        }
-      } else 
-      {
-        if(iter->dialog.state != "terminated")
-        {
-            OSS_LOG_WARNING("[DialogCollator] Aggregate: Found non-terminated dialog: " 
-                << iter->dialog.id << ": " << iter->dialog.state << " --> Force terminate dialog.");
+  // Add collated events
+  aggregateEvent.addEvent(dialogEvents);
 
-            iter->dialog.state = "terminated";
-            if(updateDialogInfoXMLState(iter->rawPayload, iter->dialog.state))
-            {
-                std::string key = generateKey(user, domain, iter->dialog);
-                setDialogInfo(key, *iter);                        
-            }
-            aggregateDialogs[iter->dialog.id] = *iter;
-        }
-      }
-    }
-  } else 
+  // Filter current dialog ids sent by kamailio
+  std::set<std::string> filterIds;
+  for(DialogEventsPtr::const_iterator iter = dialogEvents.begin()
+    ; iter != dialogEvents.end()
+    ; ++iter)
   {
-    OSS_LOG_ERROR("[DialogCollator] Aggregate: Unable to retrieve remote state: " << user << "@" << domain);
-    return false;
+    filterIds.insert((*iter)->dialogId());
   }
 
-  return true;
-}
-
-/**
- * Finalize the aggregated dialog and make sure it contains only one active dialog.
- */
-void DialogCollator::finalizeAggregatePayloads(const std::string & user, const std::string & domain
-        , AggregatedDialogs & aggregateDialogs)
-{
-  DialogInfo * activeDialog = NULL;
-  for(AggregatedDialogs::iterator iter = aggregateDialogs.begin()
-      ; iter != aggregateDialogs.end()
-      ; ++iter)
+  // Load active dialog filtering current dialog ids
+  if(loadActiveDialogs(user, domain, filterIds, activeEvents, STATE_TERMINATED))
   {
-    DialogInfo & currentDialog = iter->second;
-    if(activeDialog)
+    aggregateEvent.addEvent(activeEvents);
+  }
+
+  // Aggegate dialog events
+  aggregateEvent.mergeEvent(xml);
+}  
+
+bool DialogCollatorAndAggregator::saveDialogEvent(const std::string & key, const DialogEvent & dialogEvent)
+{
+  std::ostringstream dialogKey;
+  dialogKey << key << ":" << DIALOG_OBJECT_VERSION << ":dialog";
+  if(_redisClient.set(dialogKey.str(), dialogEvent.payload(), 3600))
+  {
+    std::ostringstream activeKey;
+    activeKey << key << ":" << DIALOG_OBJECT_VERSION << ":active";
+
+    int state = dialogEvent.dialogState();
+    if(state >= STATE_EARLY && state <= STATE_CONFIRMED)
     {
-      if(compareDialogByPreference(currentDialog.dialog, activeDialog->dialog) >= 0)
+      if(!_redisClient.set(activeKey.str(), dialogEvent.payload(), 3600))
       {
-        if(activeDialog->dialog.state != "terminated")
-        {
-            OSS_LOG_INFO("[DialogCollator] Aggregate: Force terminate dialog: " 
-                << activeDialog->dialog.id << ": " 
-                << activeDialog->dialog.state);
-
-            activeDialog->dialog.state = "terminated";
-            if(updateDialogInfoXMLState(activeDialog->rawPayload, activeDialog->dialog.state))
-            {
-                std::string key = generateKey(user, domain, activeDialog->dialog);
-                setDialogInfo(key, *activeDialog);
-            }
-
-            OSS_LOG_INFO("[DialogCollator] Aggregate: New active dialog: " 
-                << currentDialog.dialog.id << ": " 
-                << currentDialog.dialog.state);
-        }
-
-        activeDialog = &currentDialog;
-      } else if(currentDialog.dialog.state != "terminated")
-      {
-        OSS_LOG_INFO("[DialogCollator] Aggregate: Force terminate dialog: " 
-                << currentDialog.dialog.id << ": " 
-                << currentDialog.dialog.state);
-        currentDialog.dialog.state = "terminated";
-        if(updateDialogInfoXMLState(currentDialog.rawPayload, currentDialog.dialog.state))
-        {
-            std::string key = generateKey(user, domain, currentDialog.dialog);
-            setDialogInfo(key, currentDialog);
-        }
-      }
+        OSS_LOG_WARNING("[DialogCollatorAndAggregator] Unable to store active dialog. " << dialogEvent.dialogId());
+      }  
     } else
     {
-      activeDialog = &currentDialog;
-    }
-  }
-}
-
-std::string DialogCollator::generateDialogPayload(const AggregatedDialogs & aggregateDialogs)
-{
-  std::string xml;
-  for(AggregatedDialogs::const_iterator iter = aggregateDialogs.begin()
-          ; iter != aggregateDialogs.end()
-          ; ++iter)
-  {
-    mergeDialogInfoXMLDialog(xml, iter->second);
-  }
-
-  if(!xml.empty())
-  {
-    /**
-     * Required by the Kamailio Presence DialogInfo to mask
-     * the version with zero's
-     */
-    if(maskDialogInfoXMLVersion(xml))
-    {
-      OSS_LOG_DEBUG("[DialogCollator] Returning collated dialog: " << xml);
-      return xml;
-    }
-  }   
-
-  OSS_LOG_WARNING("[DialogCollator] Returning empty collated dialog");
-  return ""; 
-}
-
-std::string DialogCollator::collateAndAggregatePayloads(const std::string & user, const std::string & domain, const std::vector<std::string> & payloads)
-{
-  CollatedDialogs collatedDialogs;
-  if(collateLocalPayloads(user, domain, payloads, collatedDialogs))
-  {
-    if(collateRemotePayloads(user, domain, collatedDialogs))
-    {
-      AggregatedDialogs aggregateDialogs;
-      aggregateLocalPayloads(user, domain, collatedDialogs, aggregateDialogs);
-      if(!aggregateDialogs.empty() && aggregateRemotePayloads(user, domain, aggregateDialogs))
+      if(!_redisClient.del(activeKey.str()))
       {
-        finalizeAggregatePayloads(user, domain, aggregateDialogs);
-        return generateDialogPayload(aggregateDialogs);
+        OSS_LOG_WARNING("[DialogCollatorAndAggregator] Unable to remove active dialog. " << dialogEvent.dialogId());
       }
     }
+
+    return true;
   }
 
-  return "";
+  return false;
 }
 
-void DialogCollator::flushDialog(const std::string & user, const std::string & domain)
+bool DialogCollatorAndAggregator::loadDialogEvent(const std::string & key, DialogEvent & dialogEvent)
 {
   std::ostringstream strm;
-  strm << user << "@" << domain;
+  strm << key << ":" << DIALOG_OBJECT_VERSION << ":dialog";
 
-  std::string key = strm.str();
-  _redisClient.del(key + ":*:dialog");
-}
-
-std::string DialogCollator::generateKey(const std::string & user, const std::string & domain, const Dialog & dialog)
-{
-  std::ostringstream strm;
-  strm << user << "@" << domain << ":" << dialog.generateKey();
-  return strm.str();
-}
-
-bool DialogCollator::setDialogInfo(const std::string & key, const DialogInfo & dialogInfo)
-{
-  json::Object object;
-  dialogInfo.toJsonObject(object);
-  return _redisClient.set(key + ":dialog", object, 3600);
-}
-
-bool DialogCollator::getDialogInfo(const std::string & key, DialogInfo & dialogInfo)
-{
-  json::Object object;
-  if(_redisClient.get(key + ":dialog", object)) {
-    dialogInfo.fromJsonObject(object);
-    return true;
+  std::string payload;
+  if(_redisClient.get(strm.str(), payload)) {
+    dialogEvent.parse(payload);
+    return dialogEvent.valid();
   }
       
   return false;
 }
 
-bool DialogCollator::getAllDialogInfo(const std::string & user, const std::string & domain, std::vector<json::Object> & dialogInfos)
+bool DialogCollatorAndAggregator::loadActiveDialogs(const std::string & user, const std::string & domain
+  , const std::set<std::string> & filterIds, DialogEvents & dialogEvents, DialogState dialogState)
 {
-  std::ostringstream strm;
-  strm << user << "@" << domain << ":*:dialog";
-  return _redisClient.getAll(dialogInfos, strm.str());
-}
+  FullKeyGenerator keyGenerator(user, domain);
 
-bool DialogCollator::getAllDialogInfo(const std::string & user, const std::string & domain, CollatedDialogs & dialogInfos)
-{
-  std::vector<json::Object> objects;
-  if(getAllDialogInfo(user, domain, objects) && !objects.empty())
-  {
-    for(std::vector<json::Object>::const_iterator iter = objects.begin()
-            ; iter != objects.end()
-            ; ++iter)
+  std::ostringstream strm;
+  strm << user << "@" << domain << ":*:" << DIALOG_OBJECT_VERSION << ":active";
+
+  std::vector<std::string> payloads;
+  if(_redisClient.getAll(payloads, strm.str())) {
+    for(std::vector<std::string>::const_iterator iter = payloads.begin(); iter != payloads.end(); ++iter)
     {
-      DialogInfo dialogInfo;
-      dialogInfo.fromJsonObject(*iter);
-      if(dialogInfo.valid())
+      DialogEvent dialogEvent((*iter), dialogState);
+      if(dialogEvent.valid() 
+        && dialogEvent.dialogState() != STATE_INVALID
+        && dialogEvent.dialogState() != STATE_TRYING)
       {
-        dialogInfos.push_back(dialogInfo);
+        // Check if filtered
+        if(filterIds.find(dialogEvent.dialogId()) == filterIds.end())
+        {
+          dialogEvents.push_back(dialogEvent);
+          saveDialogEvent(keyGenerator(dialogEvent), dialogEvent);
+        }
       }
     }
+  }
+      
+  return !dialogEvents.empty();
+}
 
-    return true;
+/**
+ * class DialogCollatorPlugin
+ */   
+
+/*static*/ std::string DialogCollatorPlugin::_redisPassword = "";
+/*static*/ int DialogCollatorPlugin::_redisDb = 0;
+
+void DialogCollatorPlugin::start(const PluginSettings & settings)
+{
+  int logPriority = OSS::PRIO_ERROR;
+  if(settings.find("log-level") != settings.end())
+  {
+    try 
+    {
+      logPriority = boost::lexical_cast<int>(settings.at("log-level"));
+      OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - log-level: " << logPriority);
+    } catch(std::exception& ex)
+    {
+      //Revert any settings to error
+      logPriority = OSS::PRIO_ERROR;
+    }
   }
 
-  return false;
+  std::string logPath;
+  if(settings.find("log-path") != settings.end())
+  {
+    logPath = settings.at("log-path");
+
+    OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - log-path: " << logPath);
+  }
+
+  if(settings.find("redis-db") != settings.end())
+  {
+    try 
+    {
+      _redisDb = boost::lexical_cast<int>(settings.at("redis-db"));
+      OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - redis-db: " << _redisDb);
+    } catch(std::exception& ex)
+    {
+      //Revert any settings to zero
+      _redisDb = 0;
+    }
+  }
+
+  if(settings.find("redis-password") != settings.end())
+  {
+    _redisPassword = settings.at("redis-password");
+
+    OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - redis-password: " << _redisPassword);
+  }
+
+  // Configure logger
+  if(!logPath.empty())
+  {
+    try
+    {
+      OSS::logger_init(logPath, static_cast<OSS::LogPriority>(logPriority));
+    } catch(std::exception & ex)
+    {
+      //Don't returned error here other plugin may already init oss logger
+    }
+  }
+
+  OSS_LOG_INFO("[DialogCollatorPlugin] Start DialogCollatorPlugin");
+}
+
+void DialogCollatorPlugin::stop()
+{
+  OSS::logger_deinit();
+  OSS_LOG_INFO("[DialogCollatorPlugin] Stop DialogCollatorPlugin");
+}
+
+void DialogCollatorPlugin::create(void** handle)
+{
+  DialogCollatorAndAggregator * dialogHandle = new DialogCollatorAndAggregator();
+  if(dialogHandle != NULL)
+  {
+    dialogHandle->connect(_redisPassword, _redisDb);
+    *handle = reinterpret_cast<void*>(dialogHandle);
+    OSS_LOG_DEBUG("[DialogCollatorPlugin] Create DialogCollatorPlugin");  
+  }
+}
+
+void DialogCollatorPlugin::destroy(void** handle)
+{
+  if(handle && *handle)
+  {
+    DialogCollatorAndAggregator * dialogHandle = reinterpret_cast<DialogCollatorAndAggregator*>(*handle);
+    dialogHandle->disconnect();
+
+    delete dialogHandle;
+    *handle = NULL;
+
+    OSS_LOG_DEBUG("[DialogCollatorPlugin] Destroy DialogCollatorPlugin");
+  }
+}  
+
+bool DialogCollatorPlugin::processEvents(void* handle
+    , const std::string & user
+    , const std::string & domain
+    , const std::list<std::string> & payloads
+    , std::string & xml)
+{
+  DialogCollatorAndAggregator * dialogHandle = handle 
+    ? reinterpret_cast<DialogCollatorAndAggregator*>(handle)
+    : NULL;
+  if(dialogHandle)
+  {
+    dialogHandle->collateAndAggregate(user, domain, payloads, xml);
+  }
+
+  return !xml.empty();
+}
+
+/**
+ * Global Function Definition
+ */
+
+template<class KeyGenerator>
+void collateBy(const std::list<const DialogEvent*> & dialogEvents
+  , DialogPriority priority
+  , std::list<const DialogEvent*> & collatedEvents
+  , KeyGenerator keyGenerator)
+{
+  std::list<DialogCollateEvent> dialogCollateEvents;
+
+  for(std::list<const DialogEvent*>::const_iterator iter = dialogEvents.begin(); iter != dialogEvents.end(); ++iter)
+  {
+    std::string dialogKey = keyGenerator(*(*iter));
+    std::list<DialogCollateEvent>::iterator collateIter = std::find_if(dialogCollateEvents.begin()
+      , dialogCollateEvents.end(), DialogCollateEventFinder(dialogKey));
+    if(collateIter != dialogCollateEvents.end())
+    {
+      collateIter->addEvent(*iter);
+    } else 
+    {
+      DialogCollateEvent newCollateEvent(dialogKey);
+      newCollateEvent.addEvent(*iter);
+      dialogCollateEvents.push_back(newCollateEvent);
+    }
+  }
+
+  collateWinningNode(dialogCollateEvents, priority, collatedEvents);
+}
+
+void collateWinningNode(const std::list<DialogCollateEvent> & dialogEvents
+  , DialogPriority priority
+  , std::list<const DialogEvent*> & collatedEvents)
+{
+  collatedEvents.clear();
+
+  for(std::list<DialogCollateEvent>::const_iterator iter = dialogEvents.begin()
+    ; iter != dialogEvents.end(); ++iter)
+  {
+    const DialogEvent * ptr = iter->winningNode(priority);
+    if(ptr != NULL) 
+    {
+      collatedEvents.push_back(ptr);
+    }
+  }
 }
 
 } } } // Namespace SIPX::Kamailio::Plugin

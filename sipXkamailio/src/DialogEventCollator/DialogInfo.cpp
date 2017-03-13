@@ -17,225 +17,37 @@
 #include "DialogEventCollator/DialogInfo.h"
 
 #include <OSS/UTL/Logger.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/assign.hpp>
 #include "xmlparser/tinystr.h"
 #include "xmlparser/tinyxml.h"
 
 namespace SIPX {
 namespace Kamailio {
 namespace Plugin {
-    
-//
-// Global Methods
-//
-int getPriorityByState(const std::string & state);
-int getPreferenceByState(const std::string & state);
 
-bool DialogInfo::operator==(const DialogInfo& rhs)
-{
-  return entity == rhs.entity && state == rhs.state && dialog == rhs.dialog;
-}
-    
-bool DialogInfo::generateKey(std::string & key) const
-{
-  key = dialog.generateKey();
-  return !key.empty();
-}
+/**
+ * Global Functions
+ */
 
-bool DialogInfo::valid() const
-{
-  return !entity.empty() && !state.empty() && !version.empty() && dialog.valid();
-}
+template<class T>
+T string_to_enum(const std::string& string) { return T::unimplemented_function; }
 
-void DialogInfo::toJsonObject(json::Object& object) const 
-{
-  try
-  {
-      json::Object dialogObject;
-      dialog.toJsonObject(dialogObject);
+std::string enum_to_string(DialogState value);
 
-      object["entity"] = json::String(entity);
-      object["state"] = json::String(state);
-      object["version"] = json::String(version);
-      object["dialog"] = dialogObject;
+bool dialog_xml_parse(TiXmlElement* element, DialogInfo & dialogInfo);
+bool dialog_xml_parse(TiXmlElement* element, DialogElement & dialogElement, DialogState state = STATE_INVALID);
+void dialog_xml_print(TiXmlDocument& doc, std::string & xml);
 
-      object["rawPayload"] = json::String(rawPayload);
-  } catch (json::Exception& e) 
-  {
-      OSS_LOG_INFO("[DialogInfo] Unable to convert string to json: " << e.what())
-  }
-}
+/**
+ * class DialogEvent
+ */
 
-void DialogInfo::fromJsonObject(const json::Object& object) 
-{
-  try 
-  {
-    entity = json::String(object["entity"]).Value();
-    state = json::String(object["state"]).Value();
-    version = json::String(object["version"]).Value();
-    dialog.fromJsonObject(object["dialog"]);
-
-    rawPayload = json::String(object["rawPayload"]).Value();
-  } catch (json::Exception& e) 
-  {
-    OSS_LOG_INFO("[DialogInfo] Unable to convert json to string: " << e.what())   
-  }
-}
-
-bool Dialog::operator==(const Dialog& rhs)
-{
-  return id == rhs.id && callId == rhs.callId
-      && localTag == rhs.localTag 
-      && remoteTag == rhs.remoteTag;
-}
-
-std::string Dialog::generateKey() const
-{
-    std::ostringstream strm;
-    strm << callId << remoteTag << localTag;
-    return strm.str();
-}
-
-bool Dialog::valid() const
-{
-  return !id.empty() && !callId.empty() && !localTag.empty() 
-                     && !remoteTag.empty() && !state.empty();
-}
-
-void Dialog::toJsonObject(json::Object& object) const 
-{
-  try 
-  {
-    object["id"] = json::String(id);
-    object["callId"] = json::String(callId);
-    object["localTag"] = json::String(localTag);
-    object["remoteTag"] = json::String(remoteTag);
-    object["direction"] = json::String(direction);
-    object["state"] = json::String(state);
-  } catch (json::Exception& e) 
-  {
-    OSS_LOG_INFO("[DialogInfo] Unable to convert string to json: " << e.what())
-  }
-}
-
-void Dialog::fromJsonObject(const json::Object& object) 
-{
-  try 
-  {
-    id = json::String(object["id"]).Value();
-    callId = json::String(object["callId"]).Value();
-    localTag = json::String(object["localTag"]).Value();
-    remoteTag = json::String(object["remoteTag"]).Value();
-    direction = json::String(object["direction"]).Value();
-    state = json::String(object["state"]).Value();
-  } catch (json::Exception& e) 
-  {
-    OSS_LOG_INFO("[DialogInfo] Unable to convert json to string: " << e.what())   
-  }
-}
-
-//
-// Global Methods
-//
-
-bool parseDialogInfoXML(const std::string & xml, DialogInfo & dialogInfo) 
+/*static*/ bool DialogEvent::updateDialogState(const std::string & dialogEvent, DialogState state)
 {
   TiXmlDocument doc;
-  doc.Parse(xml.c_str(), 0, TIXML_ENCODING_UTF8);
-  if (!doc.Error()) 
-  {
-    TiXmlElement * dialogInfoElement = doc.FirstChildElement("dialog-info");
-    if (dialogInfoElement != NULL) 
-    {
-      const char * entity = dialogInfoElement->Attribute("entity");
-      const char * state = dialogInfoElement->Attribute("state");
-      const char * version = dialogInfoElement->Attribute("version");
-
-      //entity, state and version is mandatory
-      if (entity != NULL && state != NULL && version != NULL) 
-      {   
-        //Store Dialog Info
-        dialogInfo.entity = entity;
-        dialogInfo.state = state;
-        dialogInfo.version = version;
-        dialogInfo.rawPayload = xml;
-
-        TiXmlElement* dialogElement = dialogInfoElement->FirstChildElement("dialog");
-        const char * id = dialogElement ? dialogElement->Attribute("id") : NULL;
-        if (id != NULL) 
-        {
-          const char * callId = dialogElement->Attribute("call-id");
-          const char * localTag = dialogElement->Attribute("local-tag");
-          const char * remoteTag = dialogElement->Attribute("remote-tag");
-          const char * direction = dialogElement->Attribute("direction");
-          
-          
-          dialogInfo.dialog.id = id;
-          dialogInfo.dialog.callId = callId ? callId : std::string();
-          dialogInfo.dialog.localTag = localTag ? localTag : std::string();
-          dialogInfo.dialog.remoteTag = remoteTag ? remoteTag : std::string();
-          dialogInfo.dialog.direction = direction ? direction : std::string();
-
-          /* Get State */
-          TiXmlElement * stateElement = dialogElement->FirstChildElement("state");
-          if (stateElement) 
-          {
-            TiXmlNode * stateNode = stateElement->FirstChild();
-            const char * state = stateNode ? stateNode->Value() : NULL;
-            dialogInfo.dialog.state = state ? state : std::string();                            
-          }
-
-          /* Get Local Target */
-          TiXmlElement * localElement = dialogElement->FirstChildElement("local");
-          if(localElement)
-          {
-            TiXmlElement * targetElement = localElement->FirstChildElement("target");   
-            const char * localUri = targetElement ? targetElement->Attribute("uri") : NULL;
-            dialogInfo.dialog.localTarget = localUri ? localUri : std::string();
-          }
-
-          /* Get Remote Target */
-          TiXmlElement * remoteElement = dialogElement->FirstChildElement("remote");
-          if(remoteElement)
-          {
-            TiXmlElement * targetElement = remoteElement->FirstChildElement("target");   
-            const char * remoteUri = targetElement ? targetElement->Attribute("uri") : NULL;
-            dialogInfo.dialog.remoteTarget = remoteUri ? remoteUri : std::string();
-          }
-        }
-        
-        return true;
-      }
-    }
-  }
-  
-  return false;
-}
-
-bool maskDialogInfoXMLVersion(std::string & xml)
-{
-  TiXmlDocument doc;
-  doc.Parse(xml.c_str(), 0, TIXML_ENCODING_UTF8);
-  if (!doc.Error()) 
-  {
-    TiXmlElement * dialogInfoElement = doc.FirstChildElement("dialog-info");
-    if (dialogInfoElement != NULL) 
-    {
-      dialogInfoElement->SetAttribute("version", "00000000000");
-      TiXmlOutStream strm;
-      strm << doc;
-      xml = strm.c_str();
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-bool updateDialogInfoXMLState(std::string & xml, const std::string & state)
-{
-  TiXmlDocument doc;
-  doc.Parse(xml.c_str(), 0, TIXML_ENCODING_UTF8);
+  doc.Parse(dialogEvent.c_str(), 0, TIXML_ENCODING_UTF8);
   if (!doc.Error()) 
   {
     TiXmlElement * dialogInfoElement = doc.FirstChildElement("dialog-info");
@@ -245,12 +57,9 @@ bool updateDialogInfoXMLState(std::string & xml, const std::string & state)
       TiXmlElement* stateElement = dialogElement ? dialogElement->FirstChildElement("state") : NULL;
       if(stateElement)
       {
+        std::string dialogState = enum_to_string(state);
         stateElement->Clear();
-        stateElement->LinkEndChild(new TiXmlText(state.c_str()));
-
-        TiXmlOutStream strm;
-        strm << doc;
-        xml = strm.c_str();
+        stateElement->LinkEndChild(new TiXmlText(dialogState.c_str()));
         return true;
       }
     }
@@ -259,81 +68,359 @@ bool updateDialogInfoXMLState(std::string & xml, const std::string & state)
   return false;
 }
 
-bool mergeDialogInfoXMLDialog(std::string & xml, const DialogInfo & rdialogInfo)
+DialogEvent::DialogEvent()
 {
-  TiXmlDocument rdoc;
-  rdoc.Parse(rdialogInfo.rawPayload.c_str(), 0, TIXML_ENCODING_UTF8);
-  if (!rdoc.Error()) 
+
+}
+
+DialogEvent::DialogEvent(const std::string & payload, DialogState state)
+{
+  parse(payload, state);
+}
+
+void DialogEvent::parse(const std::string& payload, DialogState state)
+{
+  if(!payload.empty())
   {
-    TiXmlElement * rdialogInfoElement = rdoc.FirstChildElement("dialog-info");
-    TiXmlElement * rdialogElement = rdialogInfoElement ? rdialogInfoElement->FirstChildElement("dialog") : NULL;
-    if(rdialogElement)
-    {
-      if(xml.empty())
-      {
-        xml = rdialogInfo.rawPayload;
-        return true;
-      }
+    _payload = payload;
 
-      TiXmlDocument ldoc;
-      ldoc.Parse(xml.c_str(), 0, TIXML_ENCODING_UTF8);
-      if (!ldoc.Error()) 
+    TiXmlDocument doc;
+    doc.Parse(payload.c_str(), 0, TIXML_ENCODING_UTF8);
+    TiXmlElement * dialogInfo = !doc.Error() ? doc.FirstChildElement("dialog-info") : NULL;
+    if (dialog_xml_parse(dialogInfo, _dialogInfo)) 
+    {
+      if(dialog_xml_parse(dialogInfo->FirstChildElement("dialog"), _dialogElement, state)
+        && state != STATE_INVALID)
       {
-        TiXmlElement * ldialogInfoElement = ldoc.FirstChildElement("dialog-info");
-        if (ldialogInfoElement) 
-        {
-          ldialogInfoElement->LinkEndChild(rdialogElement->Clone());
-          TiXmlOutStream strm;
-          strm << ldoc;
-          xml = strm.c_str();
-          return true;
-        }
+        dialog_xml_print(doc, _payload);
       }
+    }
+  }
+}
+
+bool DialogEvent::updateDialogState(DialogState state)
+{
+  if(state != STATE_INVALID && DialogEvent::updateDialogState(_payload, state))
+  {
+    _dialogElement.state = state;
+    return true;
+  }
+
+  return false;
+}
+
+bool DialogEvent::valid() const
+{
+  if(!_dialogInfo.entity.empty() && !_dialogInfo.state.empty() && !_dialogInfo.version.empty()) 
+  {
+    // Validate dialog if dialog element is define
+    if(!_dialogElement.id.empty())
+    {
+      return !_dialogElement.callId.empty() 
+            && _dialogElement.state != STATE_INVALID
+            && _dialogElement.direction != DIRECTION_INVALID; 
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * class DialogCollateEvent
+ */
+
+DialogCollateEvent::DialogCollateEvent(const std::string & dialogKey)
+  : _dialogKey(dialogKey)
+{
+
+}
+
+void DialogCollateEvent::addEvent(const DialogEvent* dialogEvent)
+{
+  if(dialogEvent != NULL)
+  {
+    std::pair<DialogEvents::iterator, bool> result = _dialogEvents.insert(
+        std::make_pair(dialogEvent->dialogState(),dialogEvent)
+      );
+    if ( !result.second ) {
+        OSS_LOG_INFO("[DialogCollateEvent] Collate: Update Dialog Id: " 
+                  << dialogEvent->dialogId()
+                  << " : state -> " << (result.first)->second->dialogState()
+                  << " : payload -> " << (result.first)->second->payload());
+        _dialogEvents[dialogEvent->dialogState()] = dialogEvent;
+    } else {
+        OSS_LOG_DEBUG("[DialogCollateEvent] Collate: New Dialog Id: " 
+                  << dialogEvent->dialogId() 
+                  << " : state -> " << dialogEvent->dialogState()
+                  << " : payload -> " << dialogEvent->payload());
+    }
+  }
+}
+
+const DialogEvent* DialogCollateEvent::winningNode(DialogPriority priority) const
+{
+  /*Terminated > Confirmed > Proceeding > Early > Trying*/
+  static const std::list<DialogState> priorityByCall = boost::assign::list_of
+    (STATE_TERMINATED)(STATE_CONFIRMED)(STATE_PROCEEDING)(STATE_EARLY)(STATE_TRYING);
+
+  /*Early > Confirmed > Proceeding > Trying > Terminated*/
+  static const std::list<DialogState> priorityByDialog = boost::assign::list_of
+    (STATE_EARLY)(STATE_CONFIRMED)(STATE_PROCEEDING)(STATE_TRYING)(STATE_TERMINATED);
+
+  static const std::map<DialogPriority, std::list<DialogState> > priorityMap = 
+    boost::assign::map_list_of (PRIORITY_BY_CALL, priorityByCall) 
+                               (PRIORITY_BY_DIALOG, priorityByDialog);
+  if(priorityMap.find(priority) != priorityMap.end()) 
+  {
+    return winningNode(priorityMap.at(priority));
+  }
+
+  throw std::invalid_argument("DialogPriority not supported.");                               
+}
+
+DialogState DialogCollateEvent::winningState(DialogPriority priority) const
+{
+  const DialogEvent * dialogEvent = winningNode(priority);
+  return dialogEvent ? dialogEvent->dialogState() : STATE_INVALID;
+}
+
+const DialogEvent* DialogCollateEvent::winningNode(const std::list<DialogState> & priorityList) const
+{
+  for(std::list<DialogState>::const_iterator iter = priorityList.begin();
+    iter != priorityList.end(); ++iter)
+  {
+    if(_dialogEvents.find((*iter)) != _dialogEvents.end())
+    {
+      return _dialogEvents.at(*iter);
+    }
+  }
+  return NULL;
+}
+
+/**
+ * class DialogAggregateEvent
+ */
+
+DialogAggregateEvent::DialogAggregateEvent()
+{
+
+}
+
+void DialogAggregateEvent::addEvent(const DialogEvent* dialogEvent)
+{
+  _dialogEvents.push_back(dialogEvent);
+}
+
+void DialogAggregateEvent::addEvent(const std::list<DialogEvent> & dialogEvent)
+{
+  for(std::list<DialogEvent>::const_iterator iter = dialogEvent.begin(); iter != dialogEvent.end(); ++iter)
+  {
+    _dialogEvents.push_back(&(*iter));
+  }
+}
+
+void DialogAggregateEvent::addEvent(const std::list<const DialogEvent*> dialogEvent)
+{
+  _dialogEvents.insert(_dialogEvents.end(), dialogEvent.begin(), dialogEvent.end());
+}
+
+void DialogAggregateEvent::mergeEvent(std::string& xml) const
+{
+  TiXmlDocument mergeDoc;
+  TiXmlElement* mergeDialogInfoElement = NULL;
+  for(std::list<const DialogEvent*>::const_iterator iter = _dialogEvents.begin()
+          ; iter != _dialogEvents.end()
+          ; ++iter)
+  {
+    const DialogEvent * dialogEvent = (*iter);
+    std::string payload = dialogEvent ? dialogEvent->payload() : std::string();
+
+    if(mergeDialogInfoElement == NULL)
+    {
+      mergeDoc.Parse(payload.c_str(), 0, TIXML_ENCODING_UTF8);
+      TiXmlElement * dialogInfoElement = !mergeDoc.Error() ? mergeDoc.FirstChildElement("dialog-info") : NULL;
+      if(dialogInfoElement)
+      {
+        mergeDialogInfoElement = dialogInfoElement;
+        /*
+         * Masking version to zero, this is required by kamailio to let the kamailio handle
+         * versioning on Notify 
+         */
+        mergeDialogInfoElement->SetAttribute("version", "00000000000");
+        mergeDialogInfoElement->SetAttribute("state", "full");
+      }
+    } else
+    {
+      TiXmlDocument doc;
+      doc.Parse(payload.c_str(), 0, TIXML_ENCODING_UTF8);
+      TiXmlElement * dialogInfoElement = !doc.Error() ? doc.FirstChildElement("dialog-info") : NULL;
+      TiXmlElement * dialogElement = dialogInfoElement ? dialogInfoElement->FirstChildElement("dialog") : NULL;
+      if (dialogElement) 
+      {
+        mergeDialogInfoElement->LinkEndChild(dialogElement->Clone());
+      }
+    }
+  }
+
+  //if mergeDialogInfoElement is set then there is atleast one merging occured
+  if(mergeDialogInfoElement)
+  {
+    dialog_xml_print(mergeDoc, xml);  
+  }
+}
+
+/**
+ * Global Implementation
+ */
+
+template<>
+DialogDirection string_to_enum<DialogDirection>(const std::string& string)
+{
+  static const std::map<std::string, DialogDirection> enumMap = 
+    boost::assign::map_list_of ("initiator", DIRECTION_INITIATOR) 
+                               ("recipient", DIRECTION_RECIPIENT);
+  std::map<std::string, DialogDirection>::const_iterator iter = enumMap.find(
+      boost::to_lower_copy(string)
+    );                               
+  if(iter != enumMap.end()) 
+  {
+    return iter->second;
+  }
+
+  return DIRECTION_INVALID;
+}
+
+template<>
+DialogState string_to_enum<DialogState>(const std::string& string)
+{
+  static const std::map<std::string, DialogState> enumMap = 
+    boost::assign::map_list_of ("trying", STATE_TRYING) 
+                               ("proceeding", STATE_PROCEEDING)
+                               ("early", STATE_EARLY)
+                               ("confirmed", STATE_CONFIRMED)
+                               ("terminated", STATE_TERMINATED);
+  std::map<std::string, DialogState>::const_iterator iter = enumMap.find(
+      boost::to_lower_copy(string)
+    );
+  if(iter != enumMap.end()) 
+  {
+    return iter->second;
+  }                          
+  return STATE_INVALID;
+}
+
+std::string enum_to_string(DialogState value) 
+{
+  static const std::map<DialogState, std::string> enumMap = 
+    boost::assign::map_list_of (STATE_TRYING, "trying") 
+                               (STATE_PROCEEDING, "proceeding")
+                               (STATE_EARLY, "early")
+                               (STATE_CONFIRMED, "confirmed")
+                               (STATE_TERMINATED, "terminated");
+  std::map<DialogState, std::string>::const_iterator iter = enumMap.find(value);
+  if(iter != enumMap.end()) 
+  {
+    return iter->second;
+  }                          
+  
+  throw std::invalid_argument("Unsupported DialogState: " + value);
+}
+
+bool dialog_xml_parse(TiXmlElement* element, DialogInfo & dialogInfo)
+{
+  if (element != NULL) 
+  {
+    const char * entity = element->Attribute("entity");
+    const char * state = element->Attribute("state");
+    const char * version = element->Attribute("version");
+
+    //entity, state and version is mandatory
+    if (entity != NULL && state != NULL && version != NULL) 
+    {   
+      //Store Dialog Info
+      dialogInfo.entity = entity;
+      dialogInfo.state = state;
+      dialogInfo.version = version;
+      return true;
     }
   }
 
   return false;
 }
 
-int compareDialogByState(const Dialog & ldialog, const Dialog & rdialog)
+bool dialog_xml_parse(TiXmlElement* element, DialogElement & dialogElement, DialogState dialogState)
 {
-    return getPriorityByState(ldialog.state) - getPriorityByState(rdialog.state);
-}
+  const char * id = element ? element->Attribute("id") : NULL;
+  if(id != NULL)
+  {
+    /* Get Attributes */
+    const char * callId = element->Attribute("call-id");
+    const char * localTag = element->Attribute("local-tag");
+    const char * remoteTag = element->Attribute("remote-tag");
+    const char * direction = element->Attribute("direction");
+    
+    dialogElement.id = id;
+    dialogElement.callId = callId ? callId : std::string();
+    dialogElement.localTag = localTag ? localTag : std::string();
+    dialogElement.remoteTag = remoteTag ? remoteTag : std::string();
+    dialogElement.direction = direction ? string_to_enum<DialogDirection>(direction) : DIRECTION_INVALID;
 
-int compareDialogByPreference(const Dialog & ldialog, const Dialog & rdialog)
-{
-    return getPreferenceByState(ldialog.state) - getPreferenceByState(rdialog.state);
-}
+    /* Get State */
+    TiXmlElement * stateElement = element->FirstChildElement("state");
+    if (stateElement) 
+    {
+      if(dialogState != STATE_INVALID)
+      {
+        dialogElement.state = dialogState;
+        stateElement->Clear();
+        stateElement->LinkEndChild(new TiXmlText(enum_to_string(dialogState).c_str()));
+      } else
+      {
+        TiXmlNode * stateNode = stateElement->FirstChild();
+        const char * state = stateNode ? stateNode->Value() : NULL;
+        dialogElement.state = state ? string_to_enum<DialogState>(state) : STATE_INVALID;
+      }                            
+    }
 
-/* Preferred order during collate */
-int getPriorityByState(const std::string & state)
-{
-  if(state == "trying") {
-    return 1;
-  } else if(state == "early") {
-    return 2;
-  } else if(state == "confirmed") {
-    return 3;
-  } else if(state == "terminated") {
-    return 4;
-  } else {
-    return 0;
+    /* Get Local Target */
+    TiXmlElement * localElement = element->FirstChildElement("local");
+    if(localElement)
+    {
+      TiXmlElement * targetElement = localElement->FirstChildElement("target");   
+      const char * localUri = targetElement ? targetElement->Attribute("uri") : NULL;
+      dialogElement.localTarget = localUri ? localUri : std::string();
+    }
+
+    /* Get Remote Target */
+    TiXmlElement * remoteElement = element->FirstChildElement("remote");
+    if(remoteElement)
+    {
+      TiXmlElement * targetElement = remoteElement->FirstChildElement("target");   
+      const char * remoteUri = targetElement ? targetElement->Attribute("uri") : NULL;
+      dialogElement.remoteTarget = remoteUri ? remoteUri : std::string();
+    }
+
+    return true;
   }
+
+  return false;
 }
 
-/* Preferred order during aggregate */
-int getPreferenceByState(const std::string & state)
+void dialog_xml_print(TiXmlDocument& doc, std::string & xml)
 {
-  if(state == "terminated") {
-    return 1;
-  } else if(state == "trying") {
-    return 2;
-  } else if(state == "early") {
-    return 3;
-  } else if(state == "confirmed") {
-    return 4;
-  } else {
-    return 0;
+  char* charBuffer=NULL;
+  size_t size = 0;
+  
+  FILE* cstream = open_memstream(&charBuffer, &size);
+  if(cstream != 0) 
+  {
+    doc.Print(cstream, 0);
+    fflush(cstream);
+    fclose(cstream);
+    xml = std::string(charBuffer, size);
+    free(charBuffer);
   }
 }
 

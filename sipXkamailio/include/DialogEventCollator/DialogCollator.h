@@ -20,63 +20,85 @@
 #include "DialogEventCollator/DialogInfo.h"
 
 #include <boost/noncopyable.hpp>
-#include <boost/unordered_map.hpp>
 #include <OSS/Persistent/RedisClient.h>
-#include <vector>
-#include <map>
+#include <OSS/JSON/reader.h>
+#include <OSS/JSON/writer.h>
+#include <OSS/JSON/elements.h>
+#include <list>
 
 namespace SIPX {
 namespace Kamailio {
 namespace Plugin {
-    
-class DialogCollator : boost::noncopyable
+
+class DialogCollatorAndAggregator
 {
 public:
-  typedef std::vector<DialogInfo> CollatedDialogs;
-  typedef boost::unordered_map<std::string, DialogInfo> AggregatedDialogs;
+  typedef std::list<DialogEvent> DialogEvents;
+  typedef std::list<const DialogEvent*> DialogEventsPtr;
+  typedef std::list<DialogCollateEvent> DialogCollatedEvents;
 
 public:
-  DialogCollator();
-  ~DialogCollator();
-
   bool connect(const std::string& password = "", int db = 0);
   void disconnect();
 
-  bool collateLocalPayloads(const std::string & user, const std::string & domain
-      , const std::vector<std::string> & payloads
-      , CollatedDialogs & collatedDialogs);
+public:
+  bool collateAndAggregate(const std::string & user, const std::string & domain
+    , const std::list<std::string> & payloads, std::string & xml);
 
-  bool collateRemotePayloads(const std::string & user, const std::string & domain
-      , CollatedDialogs & collatedDialogs);
+  bool collateAndAggregate(const std::string & user, const std::string & domain
+    , const DialogEvents & dialogEvents, std::string & xml);
 
-  void aggregateLocalPayloads(const std::string & user, const std::string & domain
-      , const CollatedDialogs & collatedDialogs
-      , AggregatedDialogs & aggregateDialogs);
-
-  bool aggregateRemotePayloads(const std::string & user, const std::string & domain
-      , AggregatedDialogs & aggregateDialogs);
-
-  void finalizeAggregatePayloads(const std::string & user, const std::string & domain
-      , AggregatedDialogs & aggregateDialogs);
-
-  std::string generateDialogPayload(const AggregatedDialogs & aggregateDialogs);
-
-  std::string collateAndAggregatePayloads(const std::string & user, const std::string & domain
-      , const std::vector<std::string> & payloads);
-  
-  void flushDialog(const std::string & user, const std::string & domain);
+  bool collateAndAggregate(const std::string & user, const std::string & domain
+    , const DialogEventsPtr & dialogEvents, std::string & xml);
 
 private:
-  std::string generateKey(const std::string & user, const std::string & domain, const Dialog & dialog);
+
+  bool parse(const std::string & user, const std::string & domain
+    , const std::list<std::string> & payloads, DialogEvents & dialogEvents);
+  void collate(const std::string & user, const std::string & domain
+    , const DialogEventsPtr & dialogEvents, DialogEventsPtr & collatedEvents);
+  void aggregate(const std::string & user, const std::string & domain
+    , const DialogEventsPtr & dialogEvents, std::string & xml);
+
+  bool saveDialogEvent(const std::string & key, const DialogEvent & dialogEvent);
+  bool loadDialogEvent(const std::string & key, DialogEvent & dialogEvent);
+  bool loadActiveDialogs(const std::string & user, const std::string & domain
+    , const std::set<std::string> & filterIds, DialogEvents & dialogEvents
+    , DialogState state = STATE_INVALID);
   
-  bool setDialogInfo(const std::string & key, const DialogInfo & dialogInfo);
-  bool getDialogInfo(const std::string & key, DialogInfo & dialogInfo);
-  bool getAllDialogInfo(const std::string & user, const std::string & domain, std::vector<json::Object> & dialogInfos);
-  bool getAllDialogInfo(const std::string & user, const std::string & domain, CollatedDialogs & dialogInfos);
-    
+
 private:
-    OSS::Persistent::RedisClient _redisClient;
-};
+  OSS::Persistent::RedisClient _redisClient;
+
+}; // class DialogCollatorAndAggregator
+
+class DialogCollatorPlugin
+{
+public:
+  typedef std::map<std::string, std::string> PluginSettings;
+
+public:
+  static void start(const PluginSettings & settings);
+  static void stop();
+
+  static void create(void** handle);
+  static void destroy(void** handle);
+
+  static bool processEvents(void* handle, const std::string & user
+    , const std::string & domain
+    , const std::list<std::string> & payloads
+    , std::string & xml);
+
+public:
+  static std::string _redisPassword;
+  static int _redisDb;
+  static bool _useDb;
+
+}; // class DialogCollatorPlugin
+
+/**
+ * Template function definition
+ */
 
 } } } // SIPX::Kamailio::Plugin
 
