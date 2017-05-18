@@ -144,7 +144,10 @@ extern "C" str* collate_body_xml(void* handle, str* response, str* pres_user, st
       std::string body = str_to_string(body_array[index]);
       if (OSS::log_get_level() >= OSS::PRIO_DEBUG)
       {
-        OSS_LOG_DEBUG("[DialogCollatorPlugin] Dialog Event Payloads " << body);
+        OSS_LOG_DEBUG("[DialogCollatorPlugin] Dialog Event Payloads " << boost::replace_all_copy( 
+            boost::replace_all_copy(body, "\r\n", "\\r\\n")
+            , "\n", "\\n"
+        ));
       }
 
       if(!body.empty()) 

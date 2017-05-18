@@ -41,13 +41,75 @@ bool dialog_xml_parse(TiXmlElement* element, DialogElement & dialogElement, Dial
 void dialog_xml_print(TiXmlDocument& doc, std::string & xml);
 
 /**
+ * Internal Classes
+ */
+
+class DialogEventFinder
+{
+public:
+  DialogEventFinder(const std::string & dialogKey, DialogKeyFlag keyFlag)
+    : _dialogKey(dialogKey)
+    , _dialogKeyFlag(keyFlag) {}
+
+  bool operator() (const DialogEvent& dialogEvent) const 
+  { 
+     return _dialogKey == dialogEvent.generateKey(_dialogKeyFlag);
+  }
+
+private:
+  const std::string & _dialogKey;
+  DialogKeyFlag _dialogKeyFlag;
+}; // class DialogEventFinder
+
+/**
+ * Struct DialogKey
+ */
+
+bool DialogElement::compareKey(const DialogElement & dialog, DialogKeyFlag keyFlag) const
+{
+  return compareKey(dialog.generateKey(keyFlag), keyFlag);
+}
+
+bool DialogElement::compareKey(const std::string & dialogKey, DialogKeyFlag keyFlag) const
+{
+  return dialogKey == generateKey(keyFlag);
+}
+
+std::string DialogElement::generateKey(DialogKeyFlag keyFlag) const
+{
+  static const std::string COLON = ":";
+
+  const std::string & keyLocalTag = (direction == DIRECTION_INITIATOR) ? localTag : remoteTag;
+  const std::string & keyRemoteTag = (direction == DIRECTION_INITIATOR) ? remoteTag : localTag;
+  
+  std::ostringstream stream;
+  switch(keyFlag)
+  {
+  case KEY_DIALOG_ID:
+    stream << callId << COLON << keyLocalTag << COLON << keyRemoteTag;
+    break;
+  case KEY_LOCAL_ID:
+    stream << callId << COLON << keyLocalTag;
+    break;
+  case KEY_CALL_ID:
+    stream << callId;
+    break;
+  default:
+    break;
+  }
+
+  return stream.str();
+}
+
+/**
  * class DialogEvent
  */
 
-/*static*/ bool DialogEvent::updateDialogState(const std::string & dialogEvent, DialogState state)
+/*static*/ bool DialogEvent::updateDialogState(const std::string & dialogXml, DialogState state
+  , std::string & updatedXml)
 {
   TiXmlDocument doc;
-  doc.Parse(dialogEvent.c_str(), 0, TIXML_ENCODING_UTF8);
+  doc.Parse(dialogXml.c_str(), 0, TIXML_ENCODING_UTF8);
   if (!doc.Error()) 
   {
     TiXmlElement * dialogInfoElement = doc.FirstChildElement("dialog-info");
@@ -60,6 +122,7 @@ void dialog_xml_print(TiXmlDocument& doc, std::string & xml);
         std::string dialogState = enum_to_string(state);
         stateElement->Clear();
         stateElement->LinkEndChild(new TiXmlText(dialogState.c_str()));
+        dialog_xml_print(doc, updatedXml);
         return true;
       }
     }
@@ -68,175 +131,15 @@ void dialog_xml_print(TiXmlDocument& doc, std::string & xml);
   return false;
 }
 
-DialogEvent::DialogEvent()
-{
-
-}
-
-DialogEvent::DialogEvent(const std::string & payload, DialogState state)
-{
-  parse(payload, state);
-}
-
-void DialogEvent::parse(const std::string& payload, DialogState state)
-{
-  if(!payload.empty())
-  {
-    _payload = payload;
-
-    TiXmlDocument doc;
-    doc.Parse(payload.c_str(), 0, TIXML_ENCODING_UTF8);
-    TiXmlElement * dialogInfo = !doc.Error() ? doc.FirstChildElement("dialog-info") : NULL;
-    if (dialog_xml_parse(dialogInfo, _dialogInfo)) 
-    {
-      if(dialog_xml_parse(dialogInfo->FirstChildElement("dialog"), _dialogElement, state)
-        && state != STATE_INVALID)
-      {
-        dialog_xml_print(doc, _payload);
-      }
-    }
-  }
-}
-
-bool DialogEvent::updateDialogState(DialogState state)
-{
-  if(state != STATE_INVALID && DialogEvent::updateDialogState(_payload, state))
-  {
-    _dialogElement.state = state;
-    return true;
-  }
-
-  return false;
-}
-
-bool DialogEvent::valid() const
-{
-  if(!_dialogInfo.entity.empty() && !_dialogInfo.state.empty() && !_dialogInfo.version.empty()) 
-  {
-    // Validate dialog if dialog element is define
-    if(!_dialogElement.id.empty())
-    {
-      return !_dialogElement.callId.empty() 
-            && _dialogElement.state != STATE_INVALID
-            && _dialogElement.direction != DIRECTION_INVALID; 
-    }
-
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * class DialogCollateEvent
- */
-
-DialogCollateEvent::DialogCollateEvent(const std::string & dialogKey)
-  : _dialogKey(dialogKey)
-{
-
-}
-
-void DialogCollateEvent::addEvent(const DialogEvent* dialogEvent)
-{
-  if(dialogEvent != NULL)
-  {
-    std::pair<DialogEvents::iterator, bool> result = _dialogEvents.insert(
-        std::make_pair(dialogEvent->dialogState(),dialogEvent)
-      );
-    if ( !result.second ) {
-        OSS_LOG_INFO("[DialogCollateEvent] Collate: Update Dialog Id: " 
-                  << dialogEvent->dialogId()
-                  << " : state -> " << (result.first)->second->dialogState()
-                  << " : payload -> " << (result.first)->second->payload());
-        _dialogEvents[dialogEvent->dialogState()] = dialogEvent;
-    } else {
-        OSS_LOG_DEBUG("[DialogCollateEvent] Collate: New Dialog Id: " 
-                  << dialogEvent->dialogId() 
-                  << " : state -> " << dialogEvent->dialogState()
-                  << " : payload -> " << dialogEvent->payload());
-    }
-  }
-}
-
-const DialogEvent* DialogCollateEvent::winningNode(DialogPriority priority) const
-{
-  /*Terminated > Confirmed > Proceeding > Early > Trying*/
-  static const std::list<DialogState> priorityByCall = boost::assign::list_of
-    (STATE_TERMINATED)(STATE_CONFIRMED)(STATE_PROCEEDING)(STATE_EARLY)(STATE_TRYING);
-
-  /*Early > Confirmed > Proceeding > Trying > Terminated*/
-  static const std::list<DialogState> priorityByDialog = boost::assign::list_of
-    (STATE_EARLY)(STATE_CONFIRMED)(STATE_PROCEEDING)(STATE_TRYING)(STATE_TERMINATED);
-
-  static const std::map<DialogPriority, std::list<DialogState> > priorityMap = 
-    boost::assign::map_list_of (PRIORITY_BY_CALL, priorityByCall) 
-                               (PRIORITY_BY_DIALOG, priorityByDialog);
-  if(priorityMap.find(priority) != priorityMap.end()) 
-  {
-    return winningNode(priorityMap.at(priority));
-  }
-
-  throw std::invalid_argument("DialogPriority not supported.");                               
-}
-
-DialogState DialogCollateEvent::winningState(DialogPriority priority) const
-{
-  const DialogEvent * dialogEvent = winningNode(priority);
-  return dialogEvent ? dialogEvent->dialogState() : STATE_INVALID;
-}
-
-const DialogEvent* DialogCollateEvent::winningNode(const std::list<DialogState> & priorityList) const
-{
-  for(std::list<DialogState>::const_iterator iter = priorityList.begin();
-    iter != priorityList.end(); ++iter)
-  {
-    if(_dialogEvents.find((*iter)) != _dialogEvents.end())
-    {
-      return _dialogEvents.at(*iter);
-    }
-  }
-  return NULL;
-}
-
-/**
- * class DialogAggregateEvent
- */
-
-DialogAggregateEvent::DialogAggregateEvent()
-{
-
-}
-
-void DialogAggregateEvent::addEvent(const DialogEvent* dialogEvent)
-{
-  _dialogEvents.push_back(dialogEvent);
-}
-
-void DialogAggregateEvent::addEvent(const std::list<DialogEvent> & dialogEvent)
-{
-  for(std::list<DialogEvent>::const_iterator iter = dialogEvent.begin(); iter != dialogEvent.end(); ++iter)
-  {
-    _dialogEvents.push_back(&(*iter));
-  }
-}
-
-void DialogAggregateEvent::addEvent(const std::list<const DialogEvent*> dialogEvent)
-{
-  _dialogEvents.insert(_dialogEvents.end(), dialogEvent.begin(), dialogEvent.end());
-}
-
-void DialogAggregateEvent::mergeEvent(std::string& xml) const
+/*static*/ bool DialogEvent::mergeDialogEvent(const std::list<DialogEvent> & dialogEvents, std::string & xml)
 {
   TiXmlDocument mergeDoc;
   TiXmlElement* mergeDialogInfoElement = NULL;
-  for(std::list<const DialogEvent*>::const_iterator iter = _dialogEvents.begin()
-          ; iter != _dialogEvents.end()
+  for(std::list<DialogEvent>::const_iterator iter = dialogEvents.begin()
+          ; iter != dialogEvents.end()
           ; ++iter)
   {
-    const DialogEvent * dialogEvent = (*iter);
-    std::string payload = dialogEvent ? dialogEvent->payload() : std::string();
-
+    const std::string & payload = iter->payload();
     if(mergeDialogInfoElement == NULL)
     {
       mergeDoc.Parse(payload.c_str(), 0, TIXML_ENCODING_UTF8);
@@ -267,8 +170,200 @@ void DialogAggregateEvent::mergeEvent(std::string& xml) const
   //if mergeDialogInfoElement is set then there is atleast one merging occured
   if(mergeDialogInfoElement)
   {
-    dialog_xml_print(mergeDoc, xml);  
+    dialog_xml_print(mergeDoc, xml);
   }
+
+  return !xml.empty();
+}
+
+DialogEvent::DialogEvent()
+  : _newDialog(true)
+{
+
+}
+
+void DialogEvent::parse(const std::string& payload, DialogState state)
+{
+  if(!payload.empty())
+  {
+    _payload = payload;
+
+    TiXmlDocument doc;
+    doc.Parse(payload.c_str(), 0, TIXML_ENCODING_UTF8);
+    TiXmlElement * dialogInfo = !doc.Error() ? doc.FirstChildElement("dialog-info") : NULL;
+    if (dialog_xml_parse(dialogInfo, _dialogInfo)) 
+    {
+      if(dialog_xml_parse(dialogInfo->FirstChildElement("dialog"), _dialogElement, state)
+        && state != STATE_INVALID)
+      {
+        dialog_xml_print(doc, _payload);
+      }
+    }
+  }
+}
+
+bool DialogEvent::updateDialogState(DialogState state)
+{
+  if(state != STATE_INVALID && DialogEvent::updateDialogState(_payload, state, _payload))
+  {
+    _dialogElement.state = state;
+    return true;
+  }
+
+  return false;
+}
+
+bool DialogEvent::valid() const
+{
+  if(!_dialogInfo.entity.empty() && !_dialogInfo.state.empty() && !_dialogInfo.version.empty()) 
+  {
+    // Validate dialog if dialog element is define
+    if(!_dialogElement.id.empty())
+    {
+      return !_dialogElement.callId.empty() 
+            && _dialogElement.state != STATE_INVALID
+            && _dialogElement.direction != DIRECTION_INVALID; 
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+std::string DialogEvent::generateKey(DialogKeyFlag keyFlag) const
+{
+  return _dialogElement.generateKey(keyFlag);
+}
+
+void DialogEvent::toJson(std::string & json) const
+{
+  std::ostringstream strm;
+  strm << "{"
+      << "\"id\":" << "\"" << dialogId() <<"\","
+      << "\"state\":" << "\"" << enum_to_string(dialogState()) <<"\",";
+  if(dialogDirection() == DIRECTION_INITIATOR)
+  {
+    strm << "\"localTag\":" << "\"" << _dialogElement.localTag <<"\","
+      << "\"remoteTag\":" << "\"" << _dialogElement.remoteTag <<"\"";
+  } else if(dialogDirection() == DIRECTION_RECIPIENT)
+  {
+    strm << "\"localTag\":" << "\"" << _dialogElement.remoteTag <<"\","
+      << "\"remoteTag\":" << "\"" << _dialogElement.localTag <<"\"";
+  }
+  strm << "}";
+  json = strm.str();
+}
+
+std::string DialogEvent::toJson() const
+{
+  std::string json;
+  toJson(json);
+  return json;
+}
+
+/**
+ * class DialogCollateEvent
+ */
+
+DialogCollateEvent::DialogCollateEvent(const std::string & dialogKey, DialogKeyFlag dialogKeyFlag)
+  : _dialogKey(dialogKey)
+  , _dialogKeyFlag(dialogKeyFlag)
+{
+
+}
+
+bool DialogCollateEvent::addEvent(const DialogEvent & dialogEvent)
+{
+  DialogEvents::iterator iter = _dialogEvents.find(dialogEvent.dialogState());
+  if(iter != _dialogEvents.end())
+  {
+    // check if dialog already exist
+    OSS_LOG_INFO("[DialogCollateEvent] Collate: Add Dialog Id: " 
+                << dialogEvent.dialogId() 
+                << " : state -> " << dialogEvent.dialogState()
+                << " : json -> " << dialogEvent.toJson());
+    iter->second.push_back(dialogEvent);
+  } else
+  {
+    OSS_LOG_INFO("[DialogCollateEvent] Collate: New Dialog Id: " 
+                << dialogEvent.dialogId() 
+                << " : state -> " << dialogEvent.dialogState()
+                << " : json -> " << dialogEvent.toJson());
+    
+    std::list<DialogEvent> newDialogEvents;
+    newDialogEvents.push_back(dialogEvent);
+    _dialogEvents.insert(std::make_pair(dialogEvent.dialogState(), newDialogEvents));
+  }
+
+  return true;
+}
+
+void DialogCollateEvent::getEvent(DialogState dialogState, std::list<DialogEvent> & dialogEvents) const
+{
+  DialogEvents::const_iterator iter = _dialogEvents.find(dialogState);
+  if(iter != _dialogEvents.end())
+  {
+    dialogEvents.insert(dialogEvents.end(), iter->second.begin(), iter->second.end());
+  }
+}
+
+bool DialogCollateEvent::hasEvent(DialogState dialogState) const
+{
+  DialogEvents::const_iterator iter = _dialogEvents.find(dialogState);
+  return iter != _dialogEvents.end();
+}
+
+bool DialogCollateEvent::winningNode(DialogPriority priority, DialogEvent & dialogEvent, DialogState ignoreState) const
+{
+  std::list<DialogEvent> winningList;
+  winningNodes(priority, winningList, ignoreState);
+  if(!winningList.empty())
+  {
+    dialogEvent = winningList.back();
+    return true;
+  }
+
+  return false;                             
+}
+
+bool DialogCollateEvent::winningNodes(DialogPriority priority, std::list<DialogEvent> & dialogEvents, DialogState ignoreState) const
+{
+  /*Terminated > Confirmed > Early > Proceeding > Trying*/
+  static const std::list<DialogState> priorityByCall = boost::assign::list_of
+    (STATE_TERMINATED)(STATE_CONFIRMED)(STATE_EARLY)(STATE_PROCEEDING)(STATE_TRYING);
+
+  /*Early > Confirmed > Proceeding > Trying > Terminated*/
+  static const std::list<DialogState> priorityByDialog = boost::assign::list_of
+    (STATE_EARLY)(STATE_CONFIRMED)(STATE_PROCEEDING)(STATE_TRYING)(STATE_TERMINATED);
+
+  static const std::map<DialogPriority, std::list<DialogState> > priorityMap = 
+    boost::assign::map_list_of (PRIORITY_BY_CALL, priorityByCall) 
+                               (PRIORITY_BY_DIALOG, priorityByDialog);
+  if(priorityMap.find(priority) != priorityMap.end()) 
+  {
+    return winningNodes(priorityMap.at(priority), dialogEvents, ignoreState);
+  } else
+  {
+    throw std::invalid_argument("DialogPriority not supported.");  
+  }
+}
+
+bool DialogCollateEvent::winningNodes(const std::list<DialogState> & priorityList
+  , std::list<DialogEvent> & dialogEvents, DialogState ignoreState) const
+{
+  for(std::list<DialogState>::const_iterator iter = priorityList.begin();
+    iter != priorityList.end(); ++iter)
+  {
+    if(ignoreState != *iter && _dialogEvents.find((*iter)) != _dialogEvents.end())
+    {
+      const std::list<DialogEvent> & tempList = _dialogEvents.at(*iter);
+      dialogEvents.insert(dialogEvents.end(), tempList.begin(), tempList.end());
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

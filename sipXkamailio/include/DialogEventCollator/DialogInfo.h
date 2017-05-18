@@ -28,6 +28,14 @@ namespace SIPX {
 namespace Kamailio {
 namespace Plugin {
 
+/*
+ * Forward Classes
+ */
+class DialogCollatorAndAggregator;
+
+/*
+ * Enum definitions
+ */
 enum DialogState
 {
   STATE_INVALID = 0,
@@ -53,6 +61,16 @@ enum DialogPriority
   PRIORITY_BY_DIALOG
 }; // enum DialogPriority
 
+enum DialogKeyFlag
+{
+  KEY_DIALOG_ID, //call id, local tag and remote tag
+  KEY_LOCAL_ID, //call id and local tag
+  KEY_CALL_ID //call id
+}; // enum DialogKeyType
+
+/*
+ * Struct definitions
+ */
 struct DialogElement
 {
   std::string id;
@@ -68,6 +86,10 @@ struct DialogElement
   DialogElement() 
     : direction(DIRECTION_INVALID)
     , state(STATE_INVALID) {}
+
+  bool compareKey(const DialogElement & dialog, DialogKeyFlag keyFlag) const;
+  bool compareKey(const std::string & dialogKey, DialogKeyFlag keyFlag) const; 
+  std::string generateKey(DialogKeyFlag keyFlag) const;
 }; // Struct DialogElement
     
 struct DialogInfo
@@ -77,18 +99,23 @@ struct DialogInfo
   std::string version;  
 }; // Struct DialogInfoEvent
 
+/*
+ * Class definitions
+ */
 class DialogEvent
 {
 public:
-  static bool updateDialogState(const std::string & dialogEvent, DialogState state);
+  static bool updateDialogState(const std::string & dialogXml, DialogState state, std::string & updatedXml);
+  static bool mergeDialogEvent(const std::list<DialogEvent> & dialogEvents, std::string & xml); 
 
 public:
   DialogEvent();
-  explicit DialogEvent(const std::string & payload, DialogState state = STATE_INVALID);
 
-  void parse(const std::string& payload, DialogState state = STATE_INVALID);
+  void parse(const std::string& payload, DialogState forceState = STATE_INVALID);
   bool updateDialogState(DialogState state);
   bool valid() const;
+
+  std::string generateKey(DialogKeyFlag keyFlag) const;
 
 public:
   const DialogInfo & dialogInfo() const;
@@ -99,64 +126,54 @@ public:
   DialogState dialogState() const;
   DialogDirection dialogDirection() const;
 
+  void toJson(std::string & json) const;
+  std::string toJson() const;
+
+  bool newDialog() const;
+  void newDialog(bool toggle);
+
 private:
   std::string _payload;
 
   DialogInfo _dialogInfo;
   DialogElement _dialogElement;
+
+
+  bool _newDialog;
 }; // class DialogEvent
 
 class DialogCollateEvent
 {
 public:
-  typedef std::map<DialogState, const DialogEvent*> DialogEvents;
+  typedef std::map<DialogState, std::list<DialogEvent> > DialogEvents;
 
 public:
-  explicit DialogCollateEvent(const std::string & dialogKey);
+  DialogCollateEvent(const std::string & dialogKey, DialogKeyFlag dialogKeyFlag = KEY_DIALOG_ID);
 
-  void addEvent(const DialogEvent* dialogEvent);
-  const DialogEvent* winningNode(DialogPriority priority = PRIORITY_BY_CALL) const;
-  DialogState winningState(DialogPriority priority = PRIORITY_BY_CALL) const;
+  bool addEvent(const DialogEvent & dialogEvent);
+  void getEvent(DialogState dialogState, std::list<DialogEvent> & dialogEvents) const;
+  bool hasEvent(DialogState dialogState) const;
+
+  bool winningNode(DialogPriority priority
+    , DialogEvent & dialogEvent
+    , DialogState ignoreState = STATE_INVALID) const;
+
+  bool winningNodes(DialogPriority priority
+    , std::list<DialogEvent> & dialogEvents
+    , DialogState ignoreState = STATE_INVALID) const;
 
 public:
   const std::string & dialogKey() const;
 
 private:
-  const DialogEvent* winningNode(const std::list<DialogState> & priorityList) const;
+  bool winningNodes(const std::list<DialogState> & priorityList
+    , std::list<DialogEvent> & dialogEvents, DialogState ignoreState = STATE_INVALID) const;
 
 private:
   std::string _dialogKey;
+  DialogKeyFlag _dialogKeyFlag;
   DialogEvents _dialogEvents;
-
 }; //class DialogCollateEvent;
-
-class DialogAggregateEvent
-{
-public:
-  DialogAggregateEvent();
-
-  void addEvent(const DialogEvent* dialogEvent);
-  void addEvent(const std::list<DialogEvent> & dialogEvent);
-  void addEvent(const std::list<const DialogEvent*> dialogEvent);
-  
-  void mergeEvent(std::string& xml) const;
-
-private:
-  std::list<const DialogEvent*> _dialogEvents;
-}; //class DialogAggregateEvent
-
-class DialogCollateEventFinder
-{
-public:
-  DialogCollateEventFinder(const std::string & dialogKey) 
-    : _dialogKey(dialogKey) {}
-  bool operator() (const DialogCollateEvent & dialogEvent) const 
-  { 
-    return dialogEvent.dialogKey() == _dialogKey; 
-  }
-private:
-    const std::string & _dialogKey;  
-}; // DialogCollateEventFinder
 
 inline const DialogInfo & DialogEvent::dialogInfo() const
 {
@@ -186,7 +203,17 @@ inline DialogState DialogEvent::dialogState() const
 inline DialogDirection DialogEvent::dialogDirection() const
 {
   return _dialogElement.direction;
-} 
+}
+
+inline bool DialogEvent::newDialog() const
+{
+  return _newDialog;
+}
+
+inline void DialogEvent::newDialog(bool toggle)
+{
+  _newDialog = toggle;
+}
 
 inline const std::string & DialogCollateEvent::dialogKey() const
 {
