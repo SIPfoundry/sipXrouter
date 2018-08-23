@@ -38,10 +38,18 @@ public:
   typedef std::list<DialogCollateEvent> DialogCollatedEvents;
 
 public:
+  DialogCollatorAndAggregator();
+
+public:
   bool connect(const std::string& password = "", int db = 0);
   void disconnect();
 
 public:
+  bool isActive(const std::string & user, const std::string & domain);
+
+  bool queueDialog(const std::string & user, const std::string & domain
+    , const std::string & body);
+
   bool collateAndAggregate(const std::string & user, const std::string & domain
     , const std::list<std::string> & payloads, std::string & xml);
 
@@ -50,6 +58,15 @@ public:
 
   bool collateAndAggregate(const std::string & user, const std::string & domain
     , const DialogEventsPtr & dialogEvents, std::string & xml);
+
+  bool collateAndAggregateQueue(const std::string & user, const std::string & domain
+    , std::string &xml);
+
+  bool collateAndAggregateNotify(const std::string & user, const std::string & domain
+    , const std::string & body, std::string &xml);
+
+  void flushAll();
+
 
 private:
 
@@ -65,10 +82,30 @@ private:
   bool loadActiveDialogs(const std::string & user, const std::string & domain
     , const std::set<std::string> & filterIds, DialogEvents & dialogEvents
     , DialogState state = STATE_INVALID);
+
+  void refreshActiveDialogs(const std::string & user, const std::string & domain);
+
+  bool loadQueueDialogs(const std::string & user, const std::string & domain
+    , std::vector<std::string> & keys
+    , DialogEvents & dialogEvents);
+
+  bool hasActiveDialogs(const DialogEvents & dialogEvents);
+
+public:
+  int queueDialogTTL() const;
+  int collateDialogTTL() const;
+  int activeDialogTTL() const;
+
+  void queueDialogTTL(int ttl);
+  void collateDialogTTL(int ttl);
+  void activeDialogTTL(int ttl);
   
 
 private:
   OSS::Persistent::RedisClient _redisClient;
+  int _queueDialogTTL;
+  int _collateDialogTTL;
+  int _activeDialogTTL;
 
 }; // class DialogCollatorAndAggregator
 
@@ -84,6 +121,18 @@ public:
   static void create(void** handle);
   static void destroy(void** handle);
 
+  static bool isActive(void* handle, const std::string & user
+    , const std::string & domain);
+
+  static bool queueDialog(void* handle, const std::string & user
+    , const std::string & domain, const std::string & body);
+
+  static bool collateQueue(void* handle, const std::string & user
+    , const std::string & domain, std::string & xml);
+
+  static bool collateNotify(void* handle, const std::string & user
+    , const std::string & domain, const std::string & body, std::string & xml);
+
   static bool processEvents(void* handle, const std::string & user
     , const std::string & domain
     , const std::list<std::string> & payloads
@@ -92,13 +141,45 @@ public:
 public:
   static std::string _redisPassword;
   static int _redisDb;
-  static bool _useDb;
+  static int _queueDialogTTL;
+  static int _collateDialogTTL;
+  static int _activeDialogTTL;
 
 }; // class DialogCollatorPlugin
 
 /**
- * Template function definition
+ * Template/Inline function definition
  */
+
+inline int DialogCollatorAndAggregator::queueDialogTTL() const
+{
+  return _queueDialogTTL;
+}
+
+inline int DialogCollatorAndAggregator::collateDialogTTL() const
+{
+  return _collateDialogTTL;
+}
+
+inline int DialogCollatorAndAggregator::activeDialogTTL() const
+{
+  return _activeDialogTTL;
+} 
+
+inline void DialogCollatorAndAggregator::queueDialogTTL(int ttl)
+{
+  _queueDialogTTL = ttl;
+}
+
+inline void DialogCollatorAndAggregator::collateDialogTTL(int ttl)
+{
+  _collateDialogTTL = ttl;
+}
+
+inline void DialogCollatorAndAggregator::activeDialogTTL(int ttl)
+{
+  _activeDialogTTL = ttl;
+}
 
 } } } // SIPX::Kamailio::Plugin
 

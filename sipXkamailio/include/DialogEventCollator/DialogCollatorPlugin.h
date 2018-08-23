@@ -32,6 +32,10 @@ extern "C" {
   typedef int (*collate_plugin_destroy_t)();
   typedef int (*collate_handle_init_t)(void** handle);
   typedef int (*collate_handle_destroy_t)(void** handle);
+  typedef int (*collate_handle_is_active_t)(void* handle, str* pres_user, str* pres_domain);
+  typedef int (*collate_handle_queue_dialog_t)(void* handle, str* pres_user, str* pres_domain, str* body);
+  typedef str* (*collate_queue_xml_t)(void* handle, str* response, str* pres_user, str* pres_domain);
+  typedef str* (*collate_notify_xml_t)(void* handle, str* response, str* pres_user, str* pres_domain, str* body);
   typedef str* (*collate_body_xml_t)(void* handle, str* response, str* pres_user, str* pres_domain, str** body_array, int n);
   typedef void (*free_collate_body_t)(void* handle, char* body);
 
@@ -40,6 +44,10 @@ extern "C" {
     collate_plugin_destroy_t collate_plugin_destroy;
     collate_handle_init_t collate_handle_init;
     collate_handle_destroy_t collate_handle_destroy;
+    collate_handle_is_active_t collate_handle_is_active;
+    collate_handle_queue_dialog_t collate_handle_queue_dialog;
+    collate_queue_xml_t collate_queue_xml;
+    collate_notify_xml_t collate_notify_xml;
     collate_body_xml_t collate_body_xml;
     free_collate_body_t free_collate_body;
   } collate_plugin_t;

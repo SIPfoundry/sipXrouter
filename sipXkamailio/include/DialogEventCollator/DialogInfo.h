@@ -81,6 +81,8 @@ class DialogEvent
 {
 public:
   static bool updateDialogState(const std::string & dialogEvent, DialogState state);
+  static void generateMinimalDialog(const std::string & user, const std::string & domain, std::string & xml);
+  static void generateMinimalDialog(const std::string & entity, std::string & xml);
 
 public:
   DialogEvent();
@@ -96,6 +98,7 @@ public:
   const std::string & payload() const;
   
   const std::string & dialogId() const;
+  const std::string & callId() const;
   DialogState dialogState() const;
   DialogDirection dialogDirection() const;
 
@@ -176,6 +179,11 @@ inline const std::string & DialogEvent::payload() const
 inline const std::string & DialogEvent::dialogId() const
 {
   return _dialogElement.id;
+}
+
+inline const std::string & DialogEvent::callId() const
+{
+  return _dialogElement.callId;
 }
 
 inline DialogState DialogEvent::dialogState() const

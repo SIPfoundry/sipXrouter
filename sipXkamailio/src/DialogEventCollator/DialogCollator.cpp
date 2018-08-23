@@ -36,6 +36,10 @@
 /*Update object version if DialogInfoEvent structure has changed*/
 #define DIALOG_OBJECT_VERSION "v2.0.0"
 
+#define DEFAULT_REDIS_QUEUE_DIALOG_TTL 60
+#define DEFAULT_REDIS_COLLATE_DIALOG_TTL 3600
+#define DEFAULT_REDIS_ACTIVE_DIALOG_TTL 3600
+
 namespace SIPX {
 namespace Kamailio {
 namespace Plugin {
@@ -52,7 +56,7 @@ struct FullKeyGenerator
   std::string operator()(const DialogEvent & dialogEvent) const
   {
     std::ostringstream stream;
-    stream << user << "@" << domain << ":" << dialogEvent.dialogId();
+    stream << user << "@" << domain << ":" << dialogEvent.callId();
     if(dialogEvent.dialogDirection() == DIRECTION_INITIATOR)
     {
       stream << ":" << dialogEvent.dialogElement().localTag << ":"
@@ -79,7 +83,7 @@ struct TagKeyGenerator
   std::string operator()(const DialogEvent & dialogEvent) const
   {
     std::ostringstream stream;
-    stream << user << "@" << domain << ":" << dialogEvent.dialogId();
+    stream << user << "@" << domain << ":" << dialogEvent.callId();
     if(dialogEvent.dialogDirection() == DIRECTION_INITIATOR)
     {
       stream << ":" << dialogEvent.dialogElement().localTag;
@@ -104,7 +108,7 @@ struct DialogKeyGenerator
   std::string operator()(const DialogEvent & dialogEvent) const
   {
     std::ostringstream stream;
-    stream << user << "@" << domain << ":" << dialogEvent.dialogId();
+    stream << user << "@" << domain << ":" << dialogEvent.callId();
     return stream.str();
   }
 }; // struct DialogKeyGenerator
@@ -130,6 +134,14 @@ bool convertFromJson(const json::Object& object, DialogEvent & dialogEvent);
  * class DialogCollatorAndAggregator
  */
 
+DialogCollatorAndAggregator::DialogCollatorAndAggregator() 
+  : _queueDialogTTL(DEFAULT_REDIS_QUEUE_DIALOG_TTL)
+  , _collateDialogTTL(DEFAULT_REDIS_COLLATE_DIALOG_TTL)
+  , _activeDialogTTL(DEFAULT_REDIS_ACTIVE_DIALOG_TTL)
+{
+
+}
+
 bool DialogCollatorAndAggregator::connect(const std::string& password, int db)
 {
   OSS_LOG_INFO("[DialogCollator] Connecting to Redis Server.");
@@ -140,6 +152,49 @@ void DialogCollatorAndAggregator::disconnect()
 {
   OSS_LOG_INFO("[DialogCollator] Disconnecting to Redis Server.");
   _redisClient.disconnect();
+}
+
+bool DialogCollatorAndAggregator::isActive(const std::string & user, const std::string & domain)
+{
+  std::ostringstream strm;
+  strm << user << "@" << domain << ":*:" << DIALOG_OBJECT_VERSION << ":active";
+
+  std::vector<std::string> keys;
+  if(_redisClient.getKeys(strm.str(), keys)) {
+    return !keys.empty();
+  }
+      
+  return false;
+}
+
+bool DialogCollatorAndAggregator::queueDialog(const std::string & user, const std::string & domain
+  , const std::string & body)
+{
+  FullKeyGenerator keyGenerator(user, domain);
+
+  std::string queueBody = body;
+  if(queueBody.empty()) {
+    // If empty we will generate basic minimal dialog (terminated state)
+    DialogEvent::generateMinimalDialog(user, domain, queueBody);  
+  }
+
+  DialogEvent dialogEvent(queueBody);
+  if(dialogEvent.valid() && dialogEvent.dialogState() != STATE_TRYING)
+  {
+    std::ostringstream queueKey;
+    queueKey << keyGenerator(dialogEvent) << ":" << DIALOG_OBJECT_VERSION << ":queue";
+
+    if(!_redisClient.set(queueKey.str(), dialogEvent.payload(), DialogCollatorPlugin::_queueDialogTTL))
+    {
+      OSS_LOG_WARNING("[DialogCollatorAndAggregator] Unable to store queue dialog. " 
+        << dialogEvent.dialogInfo().entity << ": " << dialogEvent.dialogId());
+      return false;
+    }
+
+    return true;
+  }
+
+  return false;
 }
 
 bool DialogCollatorAndAggregator::collateAndAggregate(const std::string & user, const std::string & domain
@@ -178,6 +233,97 @@ bool DialogCollatorAndAggregator::collateAndAggregate(const std::string & user, 
   return !xml.empty();
 }
 
+bool DialogCollatorAndAggregator::collateAndAggregateQueue(const std::string & user
+    , const std::string & domain, std::string &xml)
+{
+  DialogEvents queueEvents;
+  std::vector<std::string> keys;
+  if (loadQueueDialogs(user, domain, keys, queueEvents)) 
+  {
+    // NOTE:
+    // Do we sync from presence terminated dialog to phone active dialog?
+    // Do we need to collate queue phone active dialogs?
+
+    // This will sync presence active dialogs to phone terminated dialogs;
+    if(queueEvents.empty() || !hasActiveDialogs(queueEvents)) 
+    {
+      // Generated Minimal Terminated dialogs
+      DialogEvent::generateMinimalDialog(user, domain, xml);
+
+      // Force terminate dialogs in the redis db
+      std::list<std::string> payloads;
+      payloads.push_back(xml);
+
+      std::string tempResult;
+      collateAndAggregate(user, domain, payloads, tempResult);
+    } else
+    {
+      if(_activeDialogTTL > 0) 
+      {
+        refreshActiveDialogs(user, domain);
+      }
+    }
+  }
+
+  // Clean Loaded Queue
+  for(std::vector<std::string>::const_iterator iter = keys.begin(); iter != keys.end(); ++iter) {
+    _redisClient.del(*iter);
+  }
+
+  return !xml.empty();
+}
+
+bool DialogCollatorAndAggregator::collateAndAggregateNotify(const std::string & user, const std::string & domain
+  , const std::string & body, std::string &xml)
+{
+  std::string queueBody = body;
+  if(queueBody.empty()) {
+    // If empty we will generate basic minimal dialog (terminated state)
+    DialogEvent::generateMinimalDialog(user, domain, queueBody);  
+  }
+
+  DialogEvent dialogEvent(queueBody);
+
+  // NOTE:
+  // Do we sync from presence terminated dialog to phone active dialog?
+  // Do we need to collate queue phone active dialogs?
+
+  // This will sync presence active dialogs to phone terminated dialogs;
+  if(dialogEvent.valid())
+  {
+    if(dialogEvent.dialogState() == STATE_TERMINATED) 
+    {
+      // Generated Minimal Terminated dialogs
+      DialogEvent::generateMinimalDialog(user, domain, xml);
+
+      // Force terminate dialogs in the redis db
+      std::list<std::string> payloads;
+      payloads.push_back(xml);
+
+      std::string tempResult;
+      collateAndAggregate(user, domain, payloads, tempResult);
+    } else 
+    {
+      if(_activeDialogTTL > 0) 
+      {
+        refreshActiveDialogs(user, domain);
+      }
+    }
+  }
+
+  return !xml.empty();
+}
+
+void DialogCollatorAndAggregator::flushAll()
+{
+  // This is mostly use for unit test;
+  std::vector<std::string> args;
+  args.push_back("FLUSHALL");
+
+  std::ostringstream strm;
+  _redisClient.execute(args, strm);
+}
+
 bool DialogCollatorAndAggregator::parse(const std::string & user, const std::string & domain
   , const std::list<std::string> & payloads, DialogEvents & dialogEvents)
 {
@@ -188,9 +334,7 @@ bool DialogCollatorAndAggregator::parse(const std::string & user, const std::str
   for(std::list<std::string>::const_iterator iter = payloads.begin(); iter != payloads.end(); ++iter)
   {
     DialogEvent dialogEvent((*iter));
-    if(dialogEvent.valid() 
-      && dialogEvent.dialogState() != STATE_INVALID
-      && dialogEvent.dialogState() != STATE_TRYING)
+    if(dialogEvent.valid() && dialogEvent.dialogState() != STATE_TRYING)
     {
       dialogEvents.push_back(dialogEvent);
       dialogIds.insert(keyGenerator(dialogEvent));
@@ -203,9 +347,7 @@ bool DialogCollatorAndAggregator::parse(const std::string & user, const std::str
     DialogEvent dialogEvent;
     if(loadDialogEvent((*iter), dialogEvent))
     {
-      if(dialogEvent.valid() 
-        && dialogEvent.dialogState() != STATE_INVALID
-        && dialogEvent.dialogState() != STATE_TRYING)
+      if(dialogEvent.valid() && dialogEvent.dialogState() != STATE_TRYING)
       { 
         dialogEvents.push_back(dialogEvent);
       }
@@ -270,7 +412,7 @@ bool DialogCollatorAndAggregator::saveDialogEvent(const std::string & key, const
 {
   std::ostringstream dialogKey;
   dialogKey << key << ":" << DIALOG_OBJECT_VERSION << ":dialog";
-  if(_redisClient.set(dialogKey.str(), dialogEvent.payload(), 3600))
+  if(_redisClient.set(dialogKey.str(), dialogEvent.payload(), _collateDialogTTL))
   {
     std::ostringstream activeKey;
     activeKey << key << ":" << DIALOG_OBJECT_VERSION << ":active";
@@ -278,7 +420,7 @@ bool DialogCollatorAndAggregator::saveDialogEvent(const std::string & key, const
     int state = dialogEvent.dialogState();
     if(state >= STATE_EARLY && state <= STATE_CONFIRMED)
     {
-      if(!_redisClient.set(activeKey.str(), dialogEvent.payload(), 3600))
+      if(!_redisClient.set(activeKey.str(), dialogEvent.payload(), _activeDialogTTL))
       {
         OSS_LOG_WARNING("[DialogCollatorAndAggregator] Unable to store active dialog. " << dialogEvent.dialogId());
       }  
@@ -323,9 +465,7 @@ bool DialogCollatorAndAggregator::loadActiveDialogs(const std::string & user, co
     for(std::vector<std::string>::const_iterator iter = payloads.begin(); iter != payloads.end(); ++iter)
     {
       DialogEvent dialogEvent((*iter), dialogState);
-      if(dialogEvent.valid() 
-        && dialogEvent.dialogState() != STATE_INVALID
-        && dialogEvent.dialogState() != STATE_TRYING)
+      if(dialogEvent.valid() && dialogEvent.dialogState() != STATE_TRYING)
       {
         // Check if filtered
         if(filterIds.find(dialogEvent.dialogId()) == filterIds.end())
@@ -340,11 +480,67 @@ bool DialogCollatorAndAggregator::loadActiveDialogs(const std::string & user, co
   return !dialogEvents.empty();
 }
 
+void DialogCollatorAndAggregator::refreshActiveDialogs(const std::string & user, const std::string & domain)
+{
+  std::ostringstream strm;
+  strm << user << "@" << domain << ":*:" << DIALOG_OBJECT_VERSION << ":active";
+
+  std::vector<std::string> keys;
+  if(_redisClient.getKeys(strm.str(), keys)) {
+    for(std::vector<std::string>::const_iterator iter = keys.begin(); iter != keys.end(); ++iter) {
+      std::string value;
+      if (_redisClient.get(*iter, value)) {
+        if(!_redisClient.set(*iter, value, _activeDialogTTL))
+        {
+          OSS_LOG_WARNING("[DialogCollatorAndAggregator] Unable to refresh active dialog. " << user << "@" << domain);
+        } 
+      }
+    }
+  }
+}
+
+bool DialogCollatorAndAggregator::loadQueueDialogs(const std::string & user, const std::string & domain
+  , std::vector<std::string> & keys, DialogEvents & dialogEvents)
+{
+  std::ostringstream strm;
+  strm << user << "@" << domain << "*" << DIALOG_OBJECT_VERSION << ":queue";
+
+  if(_redisClient.getKeys(strm.str(), keys)) {
+    for(std::vector<std::string>::const_iterator iter = keys.begin(); iter != keys.end(); ++iter) {
+      std::string value;
+      if (_redisClient.get(*iter, value)) {
+        DialogEvent dialogEvent(value);
+        if(dialogEvent.valid() && dialogEvent.dialogState() != STATE_TRYING)
+        {
+          dialogEvents.push_back(dialogEvent);
+        }
+      }
+    }
+  }
+      
+  return !dialogEvents.empty();
+}
+
+bool DialogCollatorAndAggregator::hasActiveDialogs(const DialogEvents & dialogEvents)
+{
+  for(DialogEvents::const_iterator iter = dialogEvents.begin(); iter != dialogEvents.end(); ++iter)
+  {
+    if(iter->dialogState() > STATE_TRYING && iter->dialogState() < STATE_TERMINATED) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * class DialogCollatorPlugin
  */   
 
 /*static*/ std::string DialogCollatorPlugin::_redisPassword = "";
+/*static*/ int DialogCollatorPlugin::_queueDialogTTL = DEFAULT_REDIS_QUEUE_DIALOG_TTL;
+/*static*/ int DialogCollatorPlugin::_collateDialogTTL = DEFAULT_REDIS_COLLATE_DIALOG_TTL;
+/*static*/ int DialogCollatorPlugin::_activeDialogTTL = DEFAULT_REDIS_ACTIVE_DIALOG_TTL;
 /*static*/ int DialogCollatorPlugin::_redisDb = 0;
 
 void DialogCollatorPlugin::start(const PluginSettings & settings)
@@ -391,6 +587,45 @@ void DialogCollatorPlugin::start(const PluginSettings & settings)
     OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - redis-password: " << _redisPassword);
   }
 
+  if(settings.find("queue-dialog-ttl") != settings.end())
+  {
+    try 
+    {
+      _queueDialogTTL = boost::lexical_cast<int>(settings.at("queue-dialog-ttl"));
+      OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - queue-dialog-ttl: " << _queueDialogTTL);
+    } catch(std::exception& ex)
+    {
+      //Revert any settings default to seconds
+      _queueDialogTTL = DEFAULT_REDIS_QUEUE_DIALOG_TTL;
+    }
+  }
+
+  if(settings.find("collate-dialog-ttl") != settings.end())
+  {
+    try 
+    {
+      _collateDialogTTL = boost::lexical_cast<int>(settings.at("collate-dialog-ttl"));
+      OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - collate-dialog-ttl: " << _collateDialogTTL);
+    } catch(std::exception& ex)
+    {
+      //Revert any settings default to seconds
+      _collateDialogTTL = DEFAULT_REDIS_COLLATE_DIALOG_TTL;
+    }
+  }
+
+  if(settings.find("active-dialog-ttl") != settings.end())
+  {
+    try 
+    {
+      _activeDialogTTL = boost::lexical_cast<int>(settings.at("active-dialog-ttl"));
+      OSS_LOG_DEBUG("[DialogCollatorPlugin] Plugin Settings - active-dialog-ttl: " << _activeDialogTTL);
+    } catch(std::exception& ex)
+    {
+      //Revert any settings default to seconds
+      _activeDialogTTL = DEFAULT_REDIS_ACTIVE_DIALOG_TTL;
+    }
+  }
+
   // Configure logger
   if(!logPath.empty())
   {
@@ -417,6 +652,9 @@ void DialogCollatorPlugin::create(void** handle)
   DialogCollatorAndAggregator * dialogHandle = new DialogCollatorAndAggregator();
   if(dialogHandle != NULL)
   {
+    dialogHandle->queueDialogTTL(_queueDialogTTL);
+    dialogHandle->collateDialogTTL(_collateDialogTTL);
+    dialogHandle->activeDialogTTL(_activeDialogTTL);
     dialogHandle->connect(_redisPassword, _redisDb);
     *handle = reinterpret_cast<void*>(dialogHandle);
     OSS_LOG_DEBUG("[DialogCollatorPlugin] Create DialogCollatorPlugin");  
@@ -436,6 +674,63 @@ void DialogCollatorPlugin::destroy(void** handle)
     OSS_LOG_DEBUG("[DialogCollatorPlugin] Destroy DialogCollatorPlugin");
   }
 }  
+
+bool DialogCollatorPlugin::isActive(void* handle
+    , const std::string & user
+    , const std::string & domain)
+{
+  DialogCollatorAndAggregator * dialogHandle = handle 
+    ? reinterpret_cast<DialogCollatorAndAggregator*>(handle)
+    : NULL;
+  if(dialogHandle)
+  {
+    return dialogHandle->isActive(user, domain);
+  }
+
+  return false;
+}
+
+bool DialogCollatorPlugin::queueDialog(void* handle, const std::string & user
+    , const std::string & domain, const std::string & body)
+{
+  DialogCollatorAndAggregator * dialogHandle = handle 
+    ? reinterpret_cast<DialogCollatorAndAggregator*>(handle)
+    : NULL;
+  if(dialogHandle)
+  {
+    return dialogHandle->queueDialog(user, domain, body);
+  }
+
+  return false;
+}
+
+bool DialogCollatorPlugin::collateQueue(void* handle, const std::string & user
+    , const std::string & domain, std::string & xml)
+{
+  DialogCollatorAndAggregator * dialogHandle = handle 
+    ? reinterpret_cast<DialogCollatorAndAggregator*>(handle)
+    : NULL;
+  if(dialogHandle)
+  {
+    return dialogHandle->collateAndAggregateQueue(user, domain, xml);
+  }
+
+  return false;
+}
+
+bool DialogCollatorPlugin::collateNotify(void* handle, const std::string & user
+  , const std::string & domain, const std::string & body, std::string & xml)
+{
+  DialogCollatorAndAggregator * dialogHandle = handle 
+    ? reinterpret_cast<DialogCollatorAndAggregator*>(handle)
+    : NULL;
+  if(dialogHandle)
+  {
+    return dialogHandle->collateAndAggregateNotify(user, domain, body, xml);
+  }
+
+  return false;
+}
 
 bool DialogCollatorPlugin::processEvents(void* handle
     , const std::string & user

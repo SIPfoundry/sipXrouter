@@ -120,11 +120,38 @@ const std::string terminatedForkTrying = "<?xml version=\"1.0\" ?>"
     "            <target uri=\"sip:5001@test.collator.inc;user=phone\" />\n"
     "        </local>\n"
     "    </dialog>\n"
+    "</dialog-info>\n";
+
+const std::string terminatedForkAB = "<?xml version=\"1.0\" ?>\n"
+    "<dialog-info xmlns=\"urn:ietf:params:xml:ns:dialog-info\" version=\"00000000000\" state=\"full\" entity=\"sip:5001@test.collator.inc\">\n"
+    "    <dialog id=\"0001@192.168.0.1\" call-id=\"0001@192.168.0.1\" local-tag=\"LOCALTAG-FORK-1\" remote-tag=\"REMOTETAG-FORK-1\" direction=\"recipient\">\n"
+    "        <state>terminated</state>\n"
+    "        <remote>\n"
+    "            <identity>sip:5002@test.collator.inc</identity>\n"
+    "            <target uri=\"sip:5002@192.168.0.1;transport=tcp\" />\n"
+    "        </remote>\n"
+    "        <local>\n"
+    "            <identity>sip:5001@test.collator.inc;user=phone</identity>\n"
+    "            <target uri=\"sip:5001@192.168.0.2;transport=tcp\" />\n"
+    "        </local>\n"
+    "    </dialog>\n"    
+    "    <dialog id=\"0001@192.168.0.1\" call-id=\"0001@192.168.0.1\" local-tag=\"LOCALTAG-FORK-2\" remote-tag=\"REMOTETAG-FORK-1\" direction=\"recipient\">\n"
+    "        <state>terminated</state>\n"
+    "        <remote>\n"
+    "            <identity>sip:5002@test.collator.inc</identity>\n"
+    "            <target uri=\"sip:5002@192.168.0.1;transport=tcp\" />\n"
+    "        </remote>\n"
+    "        <local>\n"
+    "            <identity>sip:5001@test.collator.inc;user=phone</identity>\n"
+    "            <target uri=\"sip:5001@192.168.0.3;transport=tcp\" />\n"
+    "        </local>\n"
+    "    </dialog>\n"
     "</dialog-info>\n";    
 
 TEST(DialogCollatorTest, test_aggregate_finalize_kamailio_payload_fork_call)
 {
     DialogCollatorAndAggregator dialogCA;
+    dialogCA.flushAll();
 
     std::list<std::string> payloads;
 
@@ -204,5 +231,259 @@ TEST(DialogCollatorTest, test_aggregate_finalize_kamailio_payload_fork_call)
         std::string xml;
         EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
         EXPECT_STREQ(terminatedForkB.c_str(), xml.c_str());
+    }
+}
+
+TEST(DialogCollatorTest, test_aggregate_only_minimal_termination)
+{
+    DialogCollatorAndAggregator dialogCA;
+    dialogCA.flushAll();
+
+    std::list<std::string> payloads;
+
+    // Insert a global terminated dialog
+    std::string terminatedDialog;
+    DialogEvent::generateMinimalDialog(user, domain, terminatedDialog);
+    payloads.push_back(terminatedDialog);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(terminatedDialog.c_str(), xml.c_str());
+    }
+
+    payloads.clear();
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(earlyForkB.c_str(), xml.c_str());
+    }
+    
+    payloads.clear();
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkB);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(confirmedForkA.c_str(), xml.c_str());
+    }
+
+    payloads.clear();
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkB);
+    payloads.push_back(terminatedForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkB);
+    payloads.push_back(terminatedForkA);
+    payloads.push_back(terminatedForkA);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(terminatedForkB.c_str(), xml.c_str());
+    }
+}
+
+TEST(DialogCollatorTest, test_aggregate_with_minimal_termination)
+{
+    DialogCollatorAndAggregator dialogCA;
+    dialogCA.flushAll();
+
+    std::list<std::string> payloads;
+
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(earlyForkB.c_str(), xml.c_str());
+    }
+
+    payloads.clear();
+    // Insert a global terminated dialog
+    std::string terminatedDialog;
+    DialogEvent::generateMinimalDialog(user, domain, terminatedDialog);
+    payloads.push_back(terminatedDialog);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(terminatedForkAB.c_str(), xml.c_str());
+    }
+}
+
+TEST(DialogCollatorTest, test_collate_queue)
+{
+    DialogCollatorAndAggregator dialogCA;
+    dialogCA.flushAll();
+
+    std::list<std::string> payloads;
+
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkB);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(confirmedForkA.c_str(), xml.c_str());
+    }
+
+    {
+        std::string xml;
+        std::string terminatedDialog;
+        DialogEvent::generateMinimalDialog(user, domain, terminatedDialog);
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, confirmedForkA));
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, terminatedForkB));
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, terminatedDialog));
+        EXPECT_TRUE(dialogCA.collateAndAggregateQueue(user, domain, xml));
+        EXPECT_STREQ(confirmedForkA.c_str(), xml.c_str());
+    }
+
+    {
+        std::string xml;
+        std::string terminatedDialog;
+        DialogEvent::generateMinimalDialog(user, domain, terminatedDialog);
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, terminatedForkB));
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, terminatedDialog));
+        EXPECT_TRUE(dialogCA.collateAndAggregateQueue(user, domain, xml));
+        EXPECT_STREQ(terminatedDialog.c_str(), xml.c_str());
+    }
+}
+
+TEST(DialogCollatorTest, test_collate_queue_with_empty_body)
+{
+    DialogCollatorAndAggregator dialogCA;
+    dialogCA.flushAll();
+
+    std::list<std::string> payloads;
+
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkTrying);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkA);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(earlyForkB);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(confirmedForkA);
+    payloads.push_back(terminatedForkB);
+
+    {
+        std::string xml;
+        EXPECT_TRUE(dialogCA.collateAndAggregate(user, domain, payloads, xml));
+        EXPECT_STREQ(confirmedForkA.c_str(), xml.c_str());
+    }
+
+    {
+        std::string xml;
+        std::string terminatedDialog;
+        DialogEvent::generateMinimalDialog(user, domain, terminatedDialog);
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, confirmedForkA));
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, terminatedForkB));
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, ""));
+        EXPECT_TRUE(dialogCA.collateAndAggregateQueue(user, domain, xml));
+        EXPECT_STREQ(confirmedForkA.c_str(), xml.c_str());
+    }
+
+    {
+        std::string xml;
+        std::string terminatedDialog;
+        DialogEvent::generateMinimalDialog(user, domain, terminatedDialog);
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, terminatedForkB));
+        EXPECT_TRUE(dialogCA.queueDialog(user, domain, ""));
+        EXPECT_TRUE(dialogCA.collateAndAggregateQueue(user, domain, xml));
+        EXPECT_STREQ(terminatedDialog.c_str(), xml.c_str());
     }
 }

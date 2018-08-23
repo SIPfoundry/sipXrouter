@@ -109,6 +109,21 @@ bool DialogEvent::updateDialogState(DialogState state)
   return false;
 }
 
+void DialogEvent::generateMinimalDialog(const std::string & user, const std::string & domain, std::string & xml)
+{
+  std::stringstream strm;
+  strm << "sip:" << user << "@" << domain;
+  generateMinimalDialog(strm.str(), xml);
+}
+
+void DialogEvent::generateMinimalDialog(const std::string & entity, std::string & xml)
+{
+  std::stringstream strm;
+  strm << "<?xml version=\"1.0\" ?>" << std::endl 
+    << "<dialog-info xmlns=\"urn:ietf:params:xml:ns:dialog-info\" version=\"00000000000\" state=\"full\" entity=\"" << entity << "\" />" << std::endl;
+  xml = strm.str();
+}
+
 bool DialogEvent::valid() const
 {
   if(!_dialogInfo.entity.empty() && !_dialogInfo.state.empty() && !_dialogInfo.version.empty()) 
@@ -367,6 +382,11 @@ bool dialog_xml_parse(TiXmlElement* element, DialogElement & dialogElement, Dial
     dialogElement.remoteTag = remoteTag ? remoteTag : std::string();
     dialogElement.direction = direction ? string_to_enum<DialogDirection>(direction) : DIRECTION_INVALID;
 
+    if (!dialogElement.callId.empty() && dialogElement.id != dialogElement.callId) {
+      dialogElement.id = callId; // Set id as call id attribute basing this on with kamailio format
+      element->SetAttribute("id", callId);
+    }
+
     /* Get State */
     TiXmlElement * stateElement = element->FirstChildElement("state");
     if (stateElement) 
@@ -382,6 +402,9 @@ bool dialog_xml_parse(TiXmlElement* element, DialogElement & dialogElement, Dial
         const char * state = stateNode ? stateNode->Value() : NULL;
         dialogElement.state = state ? string_to_enum<DialogState>(state) : STATE_INVALID;
       }                            
+    } else {
+      // If no state is specified. Considered this as terminated state
+      dialogElement.state = STATE_TERMINATED;
     }
 
     /* Get Local Target */
@@ -401,11 +424,12 @@ bool dialog_xml_parse(TiXmlElement* element, DialogElement & dialogElement, Dial
       const char * remoteUri = targetElement ? targetElement->Attribute("uri") : NULL;
       dialogElement.remoteTarget = remoteUri ? remoteUri : std::string();
     }
-
-    return true;
+  } else {
+    // If no dialog element is set. Default state to Terminated.
+    dialogElement.state = STATE_TERMINATED;
   }
 
-  return false;
+  return true;
 }
 
 void dialog_xml_print(TiXmlDocument& doc, std::string & xml)
