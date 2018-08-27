@@ -86,10 +86,12 @@ class SubscriptionAuth : public AuthPlugin
    friend AuthPlugin* getAuthPlugin(const UtlString& name);
    static const char* EventsRequiringAuthenticationKey;
    static const char* TargetsExemptedFromAuthenticationKey;
+   static const char* AddressExemptedFromAuthenticationKey;
 
    SipRouter* mpSipRouter;
    UtlSList   mEventPackagesRequiringAuthentication;
    UtlSList   mTargetsExemptedFromAuthentication;
+   UtlSList   mAddressExemptedFromAuthentication;
 
    /// determines whether or not the target of the request is exempted from
    /// authentication based on the user part of the R-URI and the configured list

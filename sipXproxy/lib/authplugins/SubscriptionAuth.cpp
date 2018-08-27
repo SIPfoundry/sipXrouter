@@ -22,6 +22,7 @@
 // CONSTANTS
 const char* SubscriptionAuth::EventsRequiringAuthenticationKey = "PACKAGES_REQUIRING_AUTHENTICATION";
 const char* SubscriptionAuth::TargetsExemptedFromAuthenticationKey = "TARGETS_EXEMPTED_FROM_AUTHENTICATION";
+const char* SubscriptionAuth::AddressExemptedFromAuthenticationKey = "ADDRESS_EXEMPTED_FROM_AUTHENTICATION";
 
 // TYPEDEFS
 // FORWARD DECLARATIONS
@@ -46,6 +47,7 @@ SubscriptionAuth::~SubscriptionAuth()
 {
    mEventPackagesRequiringAuthentication.destroyAll();
    mTargetsExemptedFromAuthentication.destroyAll();
+   mAddressExemptedFromAuthentication.destroyAll();
 }
 
 void
@@ -144,6 +146,29 @@ SubscriptionAuth::readConfig( OsConfigDb& configDb /**< a subhash of the individ
          }
       }
    }
+
+   UtlString addressExemptedFromAuthentication;
+   if (configDb.get(AddressExemptedFromAuthenticationKey, 
+                    addressExemptedFromAuthentication) &&
+       !addressExemptedFromAuthentication.isNull())
+   {
+      Os::Logger::instance().log( FAC_SIP, PRI_INFO
+                    ,"SubscriptionAuth[%s]::readConfig "
+                    "  %s = '%s'"
+                    ,mInstanceName.data(), AddressExemptedFromAuthenticationKey
+                    ,addressExemptedFromAuthentication.data()
+                    );
+      
+      int targetIndex = 0;
+      UtlString targetName;
+      while(NameValueTokenizer::getSubField(addressExemptedFromAuthentication.data(), 
+                                            targetIndex,
+                                            ", \t", &targetName))
+      {
+        mAddressExemptedFromAuthentication.insert( new UtlString( targetName ) );
+        targetIndex++;
+      }
+   }
 }
 
 AuthPlugin::AuthResult
@@ -169,12 +194,18 @@ SubscriptionAuth::authorizeAndModify(const UtlString& id,    /**< The authentica
    UtlString targetUser;
    requestUri.getUserId(targetUser);
 
+   UtlString hostAddress;
+   int hostPort;
+   UtlString hostProtocols;
+   request.getContactAddress(0, &hostAddress,&hostPort,&hostProtocols);
+
    if (CONTINUE == priorResult &&
        id.isNull() &&
        method.compareTo(SIP_SUBSCRIBE_METHOD) == 0 &&
        request.getEventField(eventField) &&
        mEventPackagesRequiringAuthentication.contains( &eventField ) &&
-       !isTargetExemptedFromAuthentication(targetUser))
+       (!isTargetExemptedFromAuthentication(targetUser) && 
+        !mAddressExemptedFromAuthentication.contains(&hostAddress)) )
    {
       // we do not have an authenticated ID for the request - challenge it.
       // get the call-id to use in logging
