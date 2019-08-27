@@ -105,8 +105,12 @@ SipRedirectorMapping::lookUp(
 
    if (mMappingRulesLoaded == OS_SUCCESS)
    {
+      Url fromUri;
+      message.getFromUrl(fromUri);
+
       mMap.getContactList(
          requestUri,
+         fromUri,
          urlMappingRegistrations,
          urlMappingPermissions,
          callTag);

@@ -58,7 +58,8 @@ MappingRulesUrlMapping::loadMappings(const UtlString& configFileName,
 /* ============================ ACCESSORS ================================= */
 
 OsStatus
-MappingRulesUrlMapping::getContactList(const Url& requestUri,   
+MappingRulesUrlMapping::getContactList(const Url& requestUri,
+                                       const Url& fromUri,
                                        ResultSet& rContacts,    
                                        ResultSet& rPermissions,
                                        UtlString& callTag
@@ -72,7 +73,9 @@ MappingRulesUrlMapping::getContactList(const Url& requestUri,
    if( getUserMatchContainerMatchingRequestURI(requestUri,
                                                variableDigits,                                                     
                                                pMatchingUserMatchContainerNode,
-                                               pMatchingHostMatchContainerNode ) == OS_SUCCESS )
+                                               pMatchingHostMatchContainerNode,
+                                               NULL,
+                                               &fromUri ) == OS_SUCCESS )
    {
       contactsSet = parsePermMatchContainer( requestUri, 
                                              variableDigits, 

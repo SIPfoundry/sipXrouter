@@ -399,7 +399,8 @@ UrlMapping::getUserMatchContainerMatchingRequestURI(const Url&  requestUri,
                                                     UtlString&  variableDigits,
                                                     const TiXmlNode*& prMatchingUserMatchContainerNode,
                                                     const TiXmlNode*& prMatchingHostMatchContainerNode,
-                                                    const char* ruleType
+                                                    const char* ruleType,
+                                                    const Url* fromUri
                                                     ) const
 {
     prMatchingUserMatchContainerNode = 0;
@@ -539,7 +540,8 @@ UrlMapping::getUserMatchContainerMatchingRequestURI(const Url&  requestUri,
                             userMatchFound = getUserMatchContainer(requestUri,
                                                                    pHostMatchNode,
                                                                    variableDigits,
-                                                                   prMatchingUserMatchContainerNode);
+                                                                   prMatchingUserMatchContainerNode,
+                                                                   fromUri);
                          }
                       }
                    }
@@ -555,7 +557,8 @@ OsStatus
 UrlMapping::getUserMatchContainer(const Url&             requestUri,
                                   const TiXmlNode* const pHostMatchNode,
                                   UtlString&             variableDigits,
-                                  const TiXmlNode*&      prMatchingUserMatchContainerNode ) const
+                                  const TiXmlNode*&      prMatchingUserMatchContainerNode,
+                                  const Url*             fromUri ) const
 {
     UtlString testUser;
     requestUri.getUserId(testUser);
@@ -573,8 +576,49 @@ UrlMapping::getUserMatchContainer(const Url&             requestUri,
           UtlString tagValue = pUserMatchNode->Value();
           if(tagValue.compareTo(XML_TAG_USERMATCH) == 0 )
           {
-             //found userPattern tag
              const TiXmlElement* pUserMatchElement = pUserMatchNode->ToElement();
+             const TiXmlNode* pFromPatternNode = pUserMatchElement->FirstChild(XML_TAG_FROMPATTERN);
+
+             if (fromUri && pFromPatternNode) 
+             {
+               UtlString testFromUser;
+               fromUri->getUserId(testFromUser);
+               OsStatus fromMatchFound = OS_FAILED;
+
+               //get the user text value from it
+               for( ; pFromPatternNode && (fromMatchFound != OS_SUCCESS);
+                     pFromPatternNode = pFromPatternNode->NextSibling( XML_TAG_FROMPATTERN ) )
+               {
+                  if(pFromPatternNode && pFromPatternNode->Type() == TiXmlNode::ELEMENT)
+                  {
+                     const TiXmlElement* pFromPatternElement = pFromPatternNode->ToElement();
+
+                     const TiXmlNode* pFromPatternText = pFromPatternElement->FirstChild();
+                     if(pFromPatternText && pFromPatternText->Type() == TiXmlNode::TEXT)
+                     {
+                        const TiXmlText* pXmlUser = pFromPatternText->ToText();
+                        if (pXmlUser)
+                        {
+                           UtlString userRE = pXmlUser->Value();
+                           UtlString regStr;
+                           convertRegularExpression(userRE, regStr);
+                           RegEx userExpression(regStr.data());
+                           if (userExpression.Search(testFromUser.data(), testFromUser.length()))
+                           {
+                              fromMatchFound = OS_SUCCESS;
+                           }
+                        }
+                     }
+                  }
+               }
+
+               // Skip userMatch if no from match found
+               if (fromMatchFound != OS_SUCCESS) {
+                  continue;
+               }
+             }
+
+             //found userPattern tag
              const TiXmlNode* pUserPatternNode = NULL;
              //get the user text value from it
              for( pUserPatternNode = pUserMatchElement->FirstChild( XML_TAG_USERPATTERN );

@@ -72,6 +72,7 @@ public:
 
    /// Evaluate a request URI using mapping rules semantics, return contacts and permissions.
    OsStatus getContactList(const Url& requestUri,   ///< target to check
+                           const Url& fromUri,      ///< target to check
                            ResultSet& rContacts,    ///< contacts generated from first match
                            ResultSet& rPermissions, ///< permissions that target must have
                            UtlString& callTag       ///< call tag for contacts.

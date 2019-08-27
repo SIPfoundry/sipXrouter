@@ -30,6 +30,7 @@
 
 #define XML_TAG_USERMATCH            ("userMatch")
 #define XML_TAG_USERPATTERN          ("userPattern")
+#define XML_TAG_FROMPATTERN          ("fromPattern")
 
 #define XML_TAG_PERMISSIONMATCH      ("permissionMatch")
 #define XML_TAG_PERMISSION           ("permission")
@@ -121,7 +122,8 @@ protected:
                                                      UtlString& variableDigits,
                                                      const TiXmlNode*& prMatchingUserMatchContainerNode,
                                                      const TiXmlNode*& prMatchingHostMatchContainerNode,
-                                                     const char* ruleType = NULL  ///< e.g. Emergency to match only emerg rules
+                                                     const char* ruleType = NULL,  ///< e.g. Emergency to match only emerg rules
+                                                     const Url*  fromUri = NULL
                                                      ) const;
 
     OsStatus doTransform(const Url& requestUri,
@@ -142,7 +144,8 @@ private:
    OsStatus getUserMatchContainer(const Url&              requestUri,
                                   const TiXmlNode* const  pHostMatchNode,
                                   UtlString&              variableDigits,
-                                  const TiXmlNode*&       prMatchingUserMatchContainerNode
+                                  const TiXmlNode*&       prMatchingUserMatchContainerNode,
+                                  const Url*              fromUri = NULL
                                   ) const;
 
    /// Get the name/value pair from an element; supports two syntaxes.
