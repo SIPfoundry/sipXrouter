@@ -13,7 +13,7 @@ Obsoletes: @PACKAGE_OBSOLETE_NAME@
 BuildRequires: automake
 BuildRequires: gcc-c++
 BuildRequires: cppunit-devel
-BuildRequires: zeromq-devel
+BuildRequires: zeromq3-devel
 BuildRequires: pcre-devel >= 4.5
 BuildRequires: unixODBC-devel
 BuildRequires: zip

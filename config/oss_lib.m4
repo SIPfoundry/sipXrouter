@@ -170,6 +170,7 @@ AC_DEFUN([SFAC_LIB_CORE_FLAGS],
     AC_CHECK_LIB(xmlrpc_client++, main, [], [SF_MISSING_DEP("XML RPC C++ client classes not found")])
     AC_CHECK_LIB(xmlrpc_server_abyss++, main, [], [SF_MISSING_DEP("XML RPC C++ server classes not found")])
     AC_CHECK_LIB(zmq, main, [], [SF_MISSING_DEP("ZeroMQ Libary not found")])
+    AC_CHECK_LIB(db4_cxx, main, [], [SF_MISSING_DEP("ZeroMQ Libary not found")])
 
     OSS_CORE_DEP_LIBS=""
     OSS_CORE_DEP_LIBS+=" -lgtest "
@@ -193,6 +194,14 @@ AC_DEFUN([SFAC_LIB_CORE_FLAGS],
     OSS_CORE_DEP_LIBS+=" -lxmlrpc_client++  "
     OSS_CORE_DEP_LIBS+=" -lxmlrpc_server_abyss++ "
     OSS_CORE_DEP_LIBS+=" -lzmq "
+    OSS_CORE_DEP_LIBS+=" -ldb4_cxx "
+
+    #
+    # Set flags for db4
+    #
+    CFLAGS="$CFLAGS -I/usr/include/libdb4"
+    CXXFLAGS="$CXXFLAGS -I/usr/include/libdb4"
+    LDFLAGS="${LDFLAGS} -L/usr/lib64/libdb4"
 
     #
     # Check for TURN dependencies

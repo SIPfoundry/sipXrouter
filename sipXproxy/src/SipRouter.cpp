@@ -1490,7 +1490,7 @@ SipRouter::ProxyAction SipRouter::proxyMessage(SipMessage& sipRequest, SipMessag
                   {
                     Os::Logger::instance().log(FAC_AUTH, PRI_DEBUG,
                             "SipProxy::proxyMessage add TLS record route with ruri: %s",
-                            rline);
+                            rline.c_str());
 
                     Url outboundRoute(mRouteHostSecurePort.data());
                     outboundRoute.setUrlParameter("lr",NULL);
@@ -1547,7 +1547,7 @@ SipRouter::ProxyAction SipRouter::proxyMessage(SipMessage& sipRequest, SipMessag
             {
               Os::Logger::instance().log(FAC_AUTH, PRI_DEBUG,
                             "SipProxy::proxyMessage add TLS record route with ruri: %s",
-                            rline);
+                            rline.c_str());
               
               UtlString recordRoute;
               Url outboundRoute(mRouteHostSecurePort.data());

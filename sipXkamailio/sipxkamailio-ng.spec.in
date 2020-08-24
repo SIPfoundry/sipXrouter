@@ -32,7 +32,6 @@ Requires: boost
 
 BuildRequires: libevent2-devel
 Requires: libevent2
-BuildConflicts: libevent-devel
 
 BuildRequires: gtest-devel
 Requires: gtest

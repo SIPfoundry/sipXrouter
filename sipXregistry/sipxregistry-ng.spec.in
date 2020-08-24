@@ -18,7 +18,6 @@ BuildRequires: libevent2-devel
 BuildRequires: sipxcommserverlib-ng-devel  >= %version
 BuildRequires: sipxportlib-ng-devel        >= %version
 BuildRequires: sipxtacklib-ng-devel        >= %version
-BuildConflicts: libevent-devel
 
 Source:   %name-%version.tar.gz
 
