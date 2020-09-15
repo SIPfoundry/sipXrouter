@@ -42,6 +42,9 @@ Requires: pwdutils
 Requires: xerces-c >= 2.6.0
 Requires: rpm-libs
 %endif
+%if 0%{?rhel} >= 7
+Requires: net-tools
+%endif
 Requires: sipxportlib-ng >= %version
 Requires: sipxtacklib-ng >= %version
 Requires: unixODBC >= 2.2
@@ -155,7 +158,7 @@ rm -rf $RPM_BUILD_ROOT
 %dir %attr(755,sipx,sipx) %{_localstatedir}/log/sipxpbx
 %dir %attr(755,sipx,sipx) %{_localstatedir}/run/sipxpbx
 %dir %attr(755,sipx,sipx) %{_localstatedir}/sipxdata
-%dir %attr(755,sipx,sipx) %{_localstatedir}/sipxdata/tmp
+%dir %attr(777,sipx,sipx) %{_localstatedir}/sipxdata/tmp
 %dir %attr(755,sipx,sipx) %{_localstatedir}/sipxdata/sipdb
 %dir %attr(755,sipx,sipx) %{_libexecdir}/sipXecs
 %dir %attr(755,sipx,sipx) %{_libexecdir}/sipXecs/setup.d

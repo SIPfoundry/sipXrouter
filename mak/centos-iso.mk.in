@@ -470,6 +470,7 @@ ISO_ADD_OS = \
   libattr-* \
   libblkid-* \
   libcap-2.* \
+  libcgroup-0.* \
   libcap-ng-0.* \
   libcom_err-* \
   libconfig-* \
